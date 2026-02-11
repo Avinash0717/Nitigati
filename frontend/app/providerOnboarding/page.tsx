@@ -5,6 +5,7 @@ import Link from "next/link";
 import OnboardingType from "@/components/providerOnboarding/OnboardingType";
 import OnboardingDetails from "@/components/providerOnboarding/OnboardingDetails";
 import OnboardingConfirmation from "@/components/providerOnboarding/OnboardingConfirmation";
+import AI_Onboarding, { AIOnboardingFormData } from "@/components/providerOnboarding/AI_Onboarding";
 
 // --- Page Local Interfaces ---
 
@@ -23,6 +24,14 @@ export interface OnboardingFormData {
 
 export interface ProviderPayload extends OnboardingFormData {
     // Any additional fields transformed before API call can go here
+}
+
+export interface AIProviderPayload {
+    onboarding_type: "ai";
+    transcript: string;
+    profile_picture: File | null;
+    legal_id_front: File | null;
+    legal_id_back: File | null;
 }
 
 // --- Controller Logic ---
@@ -76,8 +85,8 @@ export default function ProviderOnboardingPage() {
                 const errorData = await response.json();
                 throw new Error(
                     errorData.error ||
-                        errorData.detail ||
-                        "Failed to create provider",
+                    errorData.detail ||
+                    "Failed to create provider",
                 );
             }
 
@@ -88,7 +97,51 @@ export default function ProviderOnboardingPage() {
             console.error("Onboarding Error:", err);
             alert(
                 err.message ||
-                    "An unexpected error occurred. Please try again.",
+                "An unexpected error occurred. Please try again.",
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleAISubmit = async (formData: AIOnboardingFormData) => {
+        setIsSubmitting(true);
+        console.log("Starting AI Onboarding Submission...");
+
+        try {
+            const payload = new FormData();
+            payload.append("onboarding_type", "ai");
+            payload.append("transcript", formData.transcript);
+
+            if (formData.profilePicture)
+                payload.append("profile_picture", formData.profilePicture);
+            if (formData.legalIdFront)
+                payload.append("legal_id_front", formData.legalIdFront);
+            if (formData.legalIdBack)
+                payload.append("legal_id_back", formData.legalIdBack);
+
+            const response = await fetch("/api/providers/aiOnboarding", {
+                method: "POST",
+                body: payload,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(
+                    errorData.error ||
+                    errorData.detail ||
+                    "Failed to process AI onboarding",
+                );
+            }
+
+            const data = await response.json();
+            console.log("AI Onboarding validated successfully:", data);
+            setCurrentStep(3);
+        } catch (err: any) {
+            console.error("AI Onboarding Error:", err);
+            alert(
+                err.message ||
+                "An unexpected error occurred. Please try again.",
             );
         } finally {
             setIsSubmitting(false);
@@ -100,6 +153,16 @@ export default function ProviderOnboardingPage() {
             case 1:
                 return <OnboardingType onSelect={handleTypeSelect} />;
             case 2:
+                if (onboardingMethod === "ai") {
+                    return (
+                        <AI_Onboarding
+                            onSubmit={handleAISubmit}
+                            onBack={() => setCurrentStep(1)}
+                            onSwitchToManual={() => setOnboardingMethod("manual")}
+                            isLoading={isSubmitting}
+                        />
+                    );
+                }
                 return (
                     <OnboardingDetails
                         onSubmit={handleDetailsSubmit}

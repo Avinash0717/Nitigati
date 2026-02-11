@@ -2,7 +2,10 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Provider, Customer
-from .serializers import ProviderCreateSerializer, ProviderImageUploadSerializer, CustomerSerializer
+from .serializers import (
+    ProviderCreateSerializer, ProviderImageUploadSerializer, 
+    CustomerSerializer, ProviderAIOnboardingSerializer
+)
 
 @api_view(['POST'])
 def provider_create(request):
@@ -123,4 +126,26 @@ def customer_create(request):
             status=status.HTTP_201_CREATED
         )
     print(serializer.errors)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+def provider_ai_onboarding(request):
+    """
+    POST /api/providers/ai-onboarding/ (Multipart/form-data)
+    Validates AI onboarding data (transcript + images).
+    Does NOT save to DB or CSV.
+    """
+    serializer = ProviderAIOnboardingSerializer(data=request.data)
+    if serializer.is_valid():
+        # Extraction logic simulation (LLM parsing would happen here)
+        print("AI Onboarding Data Validated Successfully.")
+        print(f"Transcript: {serializer.validated_data['transcript'][:50]}...")
+        
+        return Response(
+            {
+                "message": "AI onboarding data received and validated successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+    
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

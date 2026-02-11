@@ -60,6 +60,15 @@ class ProviderImageUploadSerializer(serializers.Serializer):
     legal_id_back = serializers.ImageField(required=True)
 
 
+class ProviderAIOnboardingSerializer(serializers.Serializer):
+    """Handles AI-based provider onboarding data collection."""
+    onboarding_type = serializers.ChoiceField(choices=[('ai', 'ai')], default='ai')
+    transcript = serializers.CharField(required=True)
+    profile_picture = serializers.ImageField(required=True)
+    legal_id_front = serializers.ImageField(required=True)
+    legal_id_back = serializers.ImageField(required=True)
+
+
 class CustomerSerializer(serializers.ModelSerializer):
     """Handles customer registration data.
     Accepts name & password to create a Django User,

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import Image from "next/image";
 
 interface OnboardingTypeProps {
@@ -67,9 +68,16 @@ export default function OnboardingType({ onSelect }: OnboardingTypeProps) {
                         <div className="flex items-center gap-2 mb-8 text-[10px] font-black uppercase tracking-widest text-emerald-500">
                             <span>⚡</span> Faster & Easier
                         </div>
+                        {/* <Link href="/providerOnboarding/AI_Onboarding">
+                            <button
+                                className="w-full bg-emerald-500 text-white py-4 rounded-xl font-black transition-all cursor-pointer opacity-100 shadow-xl shadow-emerald-500/20"
+                            >
+                                Start with AI
+                            </button>
+                        </Link> */}
                         <button
-                            disabled
-                            className="w-full bg-emerald-500 text-white py-4 rounded-xl font-black transition-all cursor-not-allowed opacity-100 shadow-xl shadow-emerald-500/20"
+                            onClick={() => onSelect("ai")}
+                            className="w-full bg-emerald-500 text-white py-4 rounded-xl font-black transition-all cursor-pointer opacity-100 shadow-xl shadow-emerald-500/20"
                         >
                             Start with AI
                         </button>
