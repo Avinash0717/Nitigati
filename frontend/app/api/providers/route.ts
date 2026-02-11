@@ -4,16 +4,17 @@ const BACKEND_URL = "http://127.0.0.1:8000/api/providers/";
 
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
+        const formData = await request.formData();
 
         const response = await fetch(BACKEND_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
+            body: formData,
+            // Boundary is automatically set by fetch for FormData
         });
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error(`Backend error (${response.status}):`, errorText.slice(0, 200));
             return NextResponse.json(
                 { error: `Backend returned ${response.status}`, details: errorText.slice(0, 500) },
                 { status: response.status }

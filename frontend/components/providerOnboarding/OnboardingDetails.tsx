@@ -8,7 +8,10 @@ interface OnboardingDetailsProps {
     isLoading: boolean;
 }
 
-export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDetailsProps) {
+export default function OnboardingDetails({
+    onSubmit,
+    isLoading,
+}: OnboardingDetailsProps) {
     const [formData, setFormData] = useState<OnboardingFormData>({
         name: "",
         age: "",
@@ -37,15 +40,26 @@ export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDet
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: "profilePicture" | "legalIdFront" | "legalIdBack") => {
+    const handleFileChange = (
+        e: React.ChangeEvent<HTMLInputElement>,
+        field: "profilePicture" | "legalIdFront" | "legalIdBack",
+    ) => {
         const file = e.target.files?.[0] || null;
         setFormData((prev) => ({ ...prev, [field]: file }));
 
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                const previewKey = field === "profilePicture" ? "profile" : field === "legalIdFront" ? "idFront" : "idBack";
-                setPreviews((prev) => ({ ...prev, [previewKey]: reader.result as string }));
+                const previewKey =
+                    field === "profilePicture"
+                        ? "profile"
+                        : field === "legalIdFront"
+                          ? "idFront"
+                          : "idBack";
+                setPreviews((prev) => ({
+                    ...prev,
+                    [previewKey]: reader.result as string,
+                }));
             };
             reader.readAsDataURL(file);
         }
@@ -60,7 +74,8 @@ export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDet
         onSubmit(formData);
     };
 
-    const inputClasses = "w-full bg-zinc-50 border border-zinc-100 rounded-xl px-5 py-4 text-zinc-900 font-bold placeholder:text-zinc-300 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all";
+    const inputClasses =
+        "w-full bg-zinc-50 border border-zinc-100 rounded-xl px-5 py-4 text-zinc-900 font-bold placeholder:text-zinc-300 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all";
     const labelClasses = "block text-sm font-black text-zinc-900 mb-3 ml-1";
 
     return (
@@ -72,19 +87,36 @@ export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDet
                         <div className="relative group">
                             <div className="w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-zinc-100 flex items-center justify-center transition-transform group-hover:scale-105">
                                 {previews.profile ? (
-                                    <img src={previews.profile} alt="Profile" className="w-full h-full object-cover" />
+                                    <img
+                                        src={previews.profile}
+                                        alt="Profile"
+                                        className="w-full h-full object-cover"
+                                    />
                                 ) : (
                                     <span className="text-4xl">👤</span>
                                 )}
                             </div>
                             <label className="absolute bottom-0 right-0 w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg cursor-pointer hover:bg-emerald-600 transition-colors">
                                 <span>➕</span>
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, "profilePicture")} required />
+                                <input
+                                    type="file"
+                                    name="profilePicture"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) =>
+                                        handleFileChange(e, "profilePicture")
+                                    }
+                                    required
+                                />
                             </label>
                         </div>
                         <div className="text-center">
-                            <h3 className="font-black text-zinc-900 tracking-tight">Profile Picture</h3>
-                            <p className="text-xs font-bold text-zinc-400 mt-1">Upload a clear photo of yourself</p>
+                            <h3 className="font-black text-zinc-900 tracking-tight">
+                                Profile Picture
+                            </h3>
+                            <p className="text-xs font-bold text-zinc-400 mt-1">
+                                Upload a clear photo of yourself
+                            </p>
                         </div>
                     </div>
 
@@ -120,14 +152,19 @@ export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDet
                                 <label className={labelClasses}>Gender</label>
                                 <div className="flex items-center gap-6 h-[60px] px-4">
                                     {["Male", "Female", "Other"].map((g) => (
-                                        <label key={g} className="flex items-center gap-2 cursor-pointer group">
+                                        <label
+                                            key={g}
+                                            className="flex items-center gap-2 cursor-pointer group"
+                                        >
                                             <input
                                                 required
                                                 type="radio"
                                                 name="gender"
                                                 className="w-5 h-5 accent-emerald-500 cursor-pointer"
                                                 checked={formData.gender === g}
-                                                onChange={() => handleGenderChange(g)}
+                                                onChange={() =>
+                                                    handleGenderChange(g)
+                                                }
                                             />
                                             <span className="text-sm font-bold text-zinc-600 group-hover:text-zinc-900 transition-colors uppercase tracking-tight pt-1">
                                                 {g}
@@ -150,13 +187,17 @@ export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDet
                                     value={formData.location}
                                     onChange={handleChange}
                                 />
-                                <span className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-500 text-xl opacity-50">🎯</span>
+                                <span className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-500 text-xl opacity-50">
+                                    🎯
+                                </span>
                             </div>
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-8">
                             <div>
-                                <label className={labelClasses}>Phone Number</label>
+                                <label className={labelClasses}>
+                                    Phone Number
+                                </label>
                                 <input
                                     required
                                     name="phoneNumber"
@@ -168,7 +209,9 @@ export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDet
                                 />
                             </div>
                             <div>
-                                <label className={labelClasses}>Email Address</label>
+                                <label className={labelClasses}>
+                                    Email Address
+                                </label>
                                 <input
                                     required
                                     name="email"
@@ -197,36 +240,76 @@ export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDet
 
                     {/* Legal ID Section */}
                     <div>
-                        <label className={labelClasses}>Legal ID Verification</label>
+                        <label className={labelClasses}>
+                            Legal ID Verification
+                        </label>
                         <div className="grid md:grid-cols-2 gap-6">
                             {/* Front Side */}
                             <div className="relative">
                                 <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-zinc-100 rounded-[2rem] bg-zinc-50/50 hover:bg-emerald-50/10 hover:border-emerald-500 transition-all cursor-pointer group overflow-hidden">
                                     {previews.idFront ? (
-                                        <img src={previews.idFront} alt="ID Front" className="w-full h-full object-cover" />
+                                        <img
+                                            src={previews.idFront}
+                                            alt="ID Front"
+                                            className="w-full h-full object-cover"
+                                        />
                                     ) : (
                                         <>
-                                            <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">📄</span>
-                                            <p className="text-xs font-black text-zinc-900">Front Side</p>
-                                            <p className="text-[10px] font-bold text-zinc-400 mt-1 uppercase tracking-widest">Click to upload</p>
+                                            <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">
+                                                📄
+                                            </span>
+                                            <p className="text-xs font-black text-zinc-900">
+                                                Front Side
+                                            </p>
+                                            <p className="text-[10px] font-bold text-zinc-400 mt-1 uppercase tracking-widest">
+                                                Click to upload
+                                            </p>
                                         </>
                                     )}
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, "legalIdFront")} required />
+                                    <input
+                                        type="file"
+                                        name="legalIdFront"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) =>
+                                            handleFileChange(e, "legalIdFront")
+                                        }
+                                        required
+                                    />
                                 </label>
                             </div>
                             {/* Back Side */}
                             <div className="relative">
                                 <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-zinc-100 rounded-[2rem] bg-zinc-50/50 hover:bg-emerald-50/10 hover:border-emerald-500 transition-all cursor-pointer group overflow-hidden">
                                     {previews.idBack ? (
-                                        <img src={previews.idBack} alt="ID Back" className="w-full h-full object-cover" />
+                                        <img
+                                            src={previews.idBack}
+                                            alt="ID Back"
+                                            className="w-full h-full object-cover"
+                                        />
                                     ) : (
                                         <>
-                                            <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">📄</span>
-                                            <p className="text-xs font-black text-zinc-900">Back Side</p>
-                                            <p className="text-[10px] font-bold text-zinc-400 mt-1 uppercase tracking-widest">Click to upload</p>
+                                            <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">
+                                                📄
+                                            </span>
+                                            <p className="text-xs font-black text-zinc-900">
+                                                Back Side
+                                            </p>
+                                            <p className="text-[10px] font-bold text-zinc-400 mt-1 uppercase tracking-widest">
+                                                Click to upload
+                                            </p>
                                         </>
                                     )}
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, "legalIdBack")} required />
+                                    <input
+                                        type="file"
+                                        name="legalIdBack"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) =>
+                                            handleFileChange(e, "legalIdBack")
+                                        }
+                                        required
+                                    />
                                 </label>
                             </div>
                         </div>
@@ -243,7 +326,9 @@ export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDet
                         ) : (
                             <>
                                 Submit & Continue
-                                <span className="text-2xl group-hover:translate-x-2 transition-transform">→</span>
+                                <span className="text-2xl group-hover:translate-x-2 transition-transform">
+                                    →
+                                </span>
                             </>
                         )}
                     </button>
@@ -251,8 +336,12 @@ export default function OnboardingDetails({ onSubmit, isLoading }: OnboardingDet
             </div>
 
             <div className="mt-12 flex justify-center gap-10 text-[10px] font-black uppercase tracking-widest text-zinc-400">
-                <span className="flex items-center gap-2">🔒 Secure & Encrypted</span>
-                <span className="flex items-center gap-2">🛡️ KYC Verified Platform</span>
+                <span className="flex items-center gap-2">
+                    🔒 Secure & Encrypted
+                </span>
+                <span className="flex items-center gap-2">
+                    🛡️ KYC Verified Platform
+                </span>
             </div>
         </div>
     );
