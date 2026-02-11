@@ -24,3 +24,18 @@ class ProviderImageUploadSerializer(serializers.Serializer):
     profile_picture = serializers.ImageField(required=True)
     legal_id_front = serializers.ImageField(required=True)
     legal_id_back = serializers.ImageField(required=True)
+
+class CustomerSerializer(serializers.Serializer):
+    """Handles customer registration data."""
+    uuid = serializers.UUIDField(read_only=True)
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    phone_number = serializers.CharField(max_length=20)
+    profile_picture = serializers.ImageField(required=False, allow_null=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+    def validate_phone_number(self, value):
+        if not all(char.isdigit() or char in '+-() ' for char in value):
+            raise serializers.ValidationError("Invalid phone number format.")
+        return value

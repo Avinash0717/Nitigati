@@ -4,23 +4,23 @@
 */__pycache__/*
 # dependencies
 */node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+*/.pnp
+*/.pnp.*
+*/.yarn/*
+*/.yarn/patches
+*/.yarn/plugins
+*/.yarn/releases
+*/.yarn/versions
 
 # testing
-/coverage
+*/coverage
 
-# next.js
-/.next/
-/out/
+# next.js           
+*/.next/
+*/out/
 
 # production
-/build
+*/build
 
 # misc
 .DS_Store

@@ -3,8 +3,11 @@ from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import ProviderCreateSerializer, ProviderImageUploadSerializer
-from .utils import save_provider_to_csv, get_provider_from_csv, provider_exists, update_provider_images_in_csv
+from .serializers import ProviderCreateSerializer, ProviderImageUploadSerializer, CustomerSerializer
+from .utils import (
+    save_provider_to_csv, get_provider_from_csv, provider_exists, 
+    update_provider_images_in_csv, save_customer_to_csv, customer_exists, make_password
+)
 
 @api_view(['POST'])
 def provider_create(request):
@@ -57,7 +60,8 @@ def provider_upload_images(request):
     2. Validates records exist in CSV.
     3. Updates placeholders and sets images_uploaded=True.
     """
-    serializer = ProviderImageUploadSerializer(data=request.data, files=request.FILES)
+    serializer = ProviderImageUploadSerializer(data=request.data)
+
     if serializer.is_valid():
         provider_uuid = serializer.validated_data['uuid']
         
@@ -108,3 +112,51 @@ def provider_detail(request, uuid):
         {"detail": "Provider not found."},
         status=status.HTTP_404_NOT_FOUND
     )
+
+@api_view(['POST'])
+def customer_create(request):
+    """
+    POST /api/customers/ (Multipart/form-data)
+    Handles customer registration with image.
+    """
+    serializer = CustomerSerializer(data=request.data)
+    if serializer.is_valid():
+        email = serializer.validated_data['email']
+        
+        # Check duplicate email
+        if customer_exists(email):
+            return Response(
+                {"email": ["A customer with this email already exists."]},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Prepare data for storage
+        data = serializer.validated_data
+        
+        # Hash password using Django's make_password
+        raw_password = data.pop('password')
+        data['password'] = make_password(raw_password)
+        
+        # Generate UUID and Timestamp
+        data['uuid'] = str(uuid.uuid4())
+        data['created_at'] = timezone.now().isoformat()
+        
+        # Replace image object with placeholder string for CSV
+        # (The actual image file would be handled by a storage backend in a real app)
+        if data.get('profile_picture'):
+            data['profile_picture'] = "profilePic"
+        else:
+            data['profile_picture'] = ""
+            
+        # Save to CSV using helper
+        save_customer_to_csv(data)
+        
+        return Response(
+            {
+                "uuid": data['uuid'],
+                "message": "Customer created successfully"
+            },
+            status=status.HTTP_201_CREATED
+        )
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

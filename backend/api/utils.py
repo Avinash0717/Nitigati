@@ -3,9 +3,11 @@ import os
 import uuid
 from django.utils import timezone
 from django.conf import settings
+from django.contrib.auth.hashers import make_password
 
 # Path to the CSV file
 CSV_FILE_PATH = os.path.join(settings.BASE_DIR, 'api', 'data', 'provider', 'onBoardingData.csv')
+CUSTOMER_CSV_FILE_PATH = os.path.join(settings.BASE_DIR, 'api', 'data', 'customer', 'onBoardingData.csv')
 
 def initialize_csv():
     """Initializes the CSV file with headers if it doesn't exist."""
@@ -86,3 +88,45 @@ def update_provider_images_in_csv(provider_uuid, profile_pic_val, id_front_val, 
                 writer.writeheader()
                 writer.writerows(rows)
     return updated
+
+def initialize_customer_csv():
+    """Initializes the Customer CSV file with headers if it doesn't exist."""
+    print(f"Initializing CSV at: {CUSTOMER_CSV_FILE_PATH}")
+    os.makedirs(os.path.dirname(CUSTOMER_CSV_FILE_PATH), exist_ok=True)
+    if not os.path.exists(CUSTOMER_CSV_FILE_PATH):
+        print("CSV does not exist, creating with headers...")
+        with open(CUSTOMER_CSV_FILE_PATH, mode='w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                'uuid', 'username', 'email', 'password', 'phone_number', 'created_at', 'profile_picture'
+            ])
+        print("CSV created successfully.")
+    else:
+        print("CSV already exists.")
+
+def save_customer_to_csv(data):
+    """Appends a new customer row safely."""
+    initialize_customer_csv()
+    with open(CUSTOMER_CSV_FILE_PATH, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            data.get('uuid'),
+            data.get('username'),
+            data.get('email'),
+            data.get('password'),  # Already hashed
+            data.get('phone_number'),
+            data.get('created_at'),
+            data.get('profile_picture', 'profilePic')
+        ])
+
+def customer_exists(email):
+    """Prevents duplicate email registration for customers."""
+    initialize_customer_csv()
+    if not os.path.exists(CUSTOMER_CSV_FILE_PATH):
+        return False
+    with open(CUSTOMER_CSV_FILE_PATH, mode='r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row['email'] == email:
+                return True
+    return False

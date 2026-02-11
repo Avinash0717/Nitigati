@@ -189,9 +189,12 @@ export default function Home() {
               <div className="relative z-10">
                 <h2 className="text-4xl font-black mb-6 text-emerald-950">Looking for services?</h2>
                 <p className="text-emerald-900/50 mb-12 font-bold text-lg max-w-xs">Join thousands of customers who find quality help daily.</p>
-                <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black transition-all shadow-xl shadow-emerald-500/30 active:scale-95">
+                {/* <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black transition-all shadow-xl shadow-emerald-500/30 active:scale-95">
                   Get Started
-                </button>
+                </button> */}
+                <Link href="/customerOnboarding" className="bg-emerald-500 hover:bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black transition-all shadow-xl shadow-emerald-500/30 active:scale-95">
+                  Get Started
+                </Link>
               </div>
               <div className="absolute -top-24 -right-24 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] group-hover:bg-emerald-500/20 transition-all duration-700"></div>
             </div>
