@@ -1,0 +1,10 @@
+uuid,onboarding_type,name,age,gender,location,phone_number,email,password,created_at,profile_picture,legal_id_front,legal_id_back,images_uploaded
+d913ea02-bbfe-4be4-b82c-0b7d7979d5ab,manual,John Doe,30,male,New York,+1-234-567-890,johndoe@example.com,securepassword123,2026-02-11T13:31:03.039250+00:00,,,,False
+09726449-61a9-45f7-99bb-a898d091b6d7,manual,John Doe,30,male,New York,+1-234-567-890,janedoe@example.com,securepassword123,2026-02-11T13:45:10.927242+00:00,,,,False
+08ed0671-9552-4a32-9ec3-eee4a49616f2,manual,sampleUser1,21,Male,"Mumbai, India",+919876543210,sampleuser1@gmail.com,sampleUser1,2026-02-11T14:02:40.963213+00:00,,,,False
+b1438231-7e82-4234-947f-feb9155b987b,manual,sampleUser1,21,Male,"Mumbai, India",+919876543211,sampleuser2@gmail.com,sampleUser1,2026-02-11T14:10:35.481715+00:00,,,,False
+7b6c0a07-1775-45a9-a8f8-a9f297931260,manual,sampleUser3,23,Male,"Mumbai, India",+919876543213,sampleuser3@gmail.com,sampleUser3,2026-02-11T14:12:32.415353+00:00,,,,False
+f602de7d-2c92-4a42-bd13-812d6ab5506c,manual,sampleUser4,21,Male,"Mumbai, India",+919876543214,sampleuser4@gmail.com,sampleUser4,2026-02-11T14:21:00.753748+00:00,,,,False
+b4ae6a6a-8383-4281-9dc8-8f27b0eec45c,manual,sampleUser5,25,Male,"Mumbai, India",+919876543215,sampleuser5@gmail.com,sampleUser5,2026-02-11T15:28:42.232226+00:00,,,,False
+f5fe5817-344c-40ec-bbff-ed56efad2b29,manual,sampleUser6,26,Male,"Mumbai, India",+919876543216,sampleuser6@gmail.com,sampleUser6,2026-02-11T15:30:25.709391+00:00,,,,False
+6a8d8047-71c6-4375-b360-b54e643b8189,manual,sampleUser7,27,Male,"Mumbai, India",+919876543217,sampleuser7@gmail.com,sampleUser7,2026-02-11T15:40:24.743927+00:00,,,,False
