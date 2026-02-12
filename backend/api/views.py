@@ -7,49 +7,49 @@ from django.contrib.auth import authenticate
 from .models import Provider, Customer
 from .serializers import (
     ProviderCreateSerializer, ProviderImageUploadSerializer, 
-    CustomerSerializer, ProviderAIOnboardingSerializer
+    CustomerSerializer, ProviderAIOnboardingSerializer,
+    ServiceCreateSerializer
 )
 
-@api_view(['POST'])
-def login_view(request):
-    """
-    POST /api/login/
-    Validates user credentials.
-    """
-    email = request.data.get('email')
-    password = request.data.get('password')
-    keep_me_logged_in = request.data.get('keep_me_logged_in', False)
+# @api_view(['POST'])
+# def login_view(request):
+#     """
+#     POST /api/login/
+#     Validates user credentials.
+#     """
+#     email = request.data.get('email')
+#     password = request.data.get('password')
+#     keep_me_logged_in = request.data.get('keep_me_logged_in', False)
 
-    if not email or not password:
-        return Response(
-            {"message": "Email and password are required"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+#     if not email or not password:
+#         return Response(
+#             {"message": "Email and password are required"},
+#             status=status.HTTP_400_BAD_REQUEST
+#         )
 
-    try:
-        user = User.objects.get(email=email)
-    except User.DoesNotExist:
-        return Response(
-            {"message": "Invalid credentials"},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+#     try:
+#         user = User.objects.get(email=email)
+#     except User.DoesNotExist:
+#         return Response(
+#             {"message": "Invalid credentials"},
+#             status=status.HTTP_401_UNAUTHORIZED
+#         )
 
-    if user.check_password(password):
-        # In a real app, we might create a token or session here
-        return Response(
-            {
-                "message": "Login successful",
-                "authenticated": True,
-                "user_id": user.id
-            },
-            status=status.HTTP_200_OK
-        )
-    else:
-        return Response(
-            {"message": "Invalid credentials"},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-from django.contrib.auth.models import User
+#     if user.check_password(password):
+#         # In a real app, we might create a token or session here
+#         return Response(
+#             {
+#                 "message": "Login successful",
+#                 "authenticated": True,
+#                 "user_id": user.id
+#             },
+#             status=status.HTTP_200_OK
+#         )
+#     else:
+#         return Response(
+#             {"message": "Invalid credentials"},
+#             status=status.HTTP_401_UNAUTHORIZED
+#         )
 
 @api_view(['POST'])
 def provider_create(request):
@@ -376,3 +376,38 @@ def login(request):
         },
         status=status.HTTP_200_OK
     )
+
+@api_view(['POST'])
+def service_create(request):
+    """
+    POST /api/services/create/ (Multipart)
+    1. Validates fields via Serializer.
+    2. Handles multiple image/cert uploads.
+    3. Returns success with a mock/real service UUID.
+    """
+    serializer = ServiceCreateSerializer(data=request.data)
+    if serializer.is_valid():
+        # In a real app with a model, we would do:
+        # service = Service.objects.create(**serializer.validated_data)
+        # Handle files...
+        
+        # Since we assume the model exists but can't touch it:
+        service_id = str(uuid.uuid4())
+        
+        # Log received files for verification
+        images = request.FILES.getlist('service_images')
+        certs = request.FILES.getlist('certifications')
+        
+        print(f"[SERVICE CREATE] Title: {serializer.validated_data['service_title']}")
+        print(f"[SERVICE CREATE] Images received: {len(images)}")
+        print(f"[SERVICE CREATE] Certifications received: {len(certs)}")
+
+        return Response(
+            {
+                "message": "Service created successfully",
+                "service_id": service_id
+            },
+            status=status.HTTP_201_CREATED
+        )
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

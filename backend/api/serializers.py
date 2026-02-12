@@ -1,6 +1,8 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 from .models import Provider, Customer
+import json
+import uuid
 
 
 class ProviderCreateSerializer(serializers.ModelSerializer):
@@ -186,3 +188,18 @@ class CustomerSerializer(serializers.ModelSerializer):
         customer.user = user
         customer.save(update_fields=['user'])
         return customer
+
+
+class ServiceCreateSerializer(serializers.Serializer):
+    """Handles data for service creation."""
+    service_title = serializers.CharField(max_length=255)
+    service_description = serializers.CharField()
+    tags = serializers.CharField(required=False, allow_blank=True)
+    service_type = serializers.ChoiceField(choices=[("remote", "Remote"), ("visit", "Visit")])
+    price_min = serializers.DecimalField(max_digits=10, decimal_places=2)
+    price_max = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+    def validate(self, data):
+        if data['price_min'] > data['price_max']:
+            raise serializers.ValidationError("Minimum price cannot be greater than maximum price.")
+        return data

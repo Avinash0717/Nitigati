@@ -138,8 +138,8 @@ export default function ProviderDashboardPage() {
                             key={item.id}
                             onClick={() => setActiveView(item.id as ViewType)}
                             className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${activeView === item.id
-                                    ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
-                                    : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
+                                ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
+                                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
                                 }`}
                         >
                             <item.icon size={22} className={`${activeView === item.id ? "text-white" : "text-zinc-400 group-hover:text-emerald-500"} transition-colors`} />
@@ -192,10 +192,10 @@ export default function ProviderDashboardPage() {
                             <Bell size={20} className="group-hover:rotate-12 transition-transform" />
                             <span className="absolute top-3.5 right-3.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
                         </button>
-                        <button className="h-12 bg-emerald-500 hover:bg-emerald-600 text-white px-8 rounded-2xl flex items-center gap-3 font-black text-xs transition-all active:scale-95 shadow-lg shadow-emerald-500/20">
+                        <Link href="/newServiceForm" className="h-12 bg-emerald-500 hover:bg-emerald-600 text-white px-8 rounded-2xl flex items-center gap-3 font-black text-xs transition-all active:scale-95 shadow-lg shadow-emerald-500/20">
                             <Plus size={18} />
                             <span>Create New Service</span>
-                        </button>
+                        </Link>
                     </div>
                 </header>
 

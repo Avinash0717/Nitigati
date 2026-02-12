@@ -9,4 +9,5 @@ urlpatterns = [
     path("customers/", views.customer_create, name="customer-create"),
     path("provider-dashboard/summary/", views.provider_dashboard_summary, name="provider-dashboard-summary"),
     path("login/", views.login, name="login"),
+    path("services/create/", views.service_create, name="service-create"),
 ]
