@@ -87,8 +87,8 @@ export default function ProviderOnboardingPage() {
                 const errorData = await response.json();
                 throw new Error(
                     errorData.error ||
-                        errorData.detail ||
-                        "Failed to create provider",
+                    errorData.detail ||
+                    "Failed to create provider",
                 );
             }
 
@@ -99,7 +99,7 @@ export default function ProviderOnboardingPage() {
             console.error("Onboarding Error:", err);
             alert(
                 err.message ||
-                    "An unexpected error occurred. Please try again.",
+                "An unexpected error occurred. Please try again.",
             );
         } finally {
             setIsSubmitting(false);
@@ -135,8 +135,8 @@ export default function ProviderOnboardingPage() {
                 const errorData = await response.json();
                 throw new Error(
                     errorData.error ||
-                        errorData.detail ||
-                        "Failed to process AI onboarding",
+                    errorData.detail ||
+                    "Failed to process AI onboarding",
                 );
             }
 
@@ -147,7 +147,7 @@ export default function ProviderOnboardingPage() {
             console.error("AI Onboarding Error:", err);
             alert(
                 err.message ||
-                    "An unexpected error occurred. Please try again.",
+                "An unexpected error occurred. Please try again.",
             );
         } finally {
             setIsSubmitting(false);
@@ -175,6 +175,9 @@ export default function ProviderOnboardingPage() {
                     <OnboardingDetails
                         onSubmit={handleDetailsSubmit}
                         isLoading={isSubmitting}
+                        onSwitchToAI={() =>
+                            setOnboardingMethod("ai")
+                        }
                     />
                 );
             case 3:

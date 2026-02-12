@@ -1,12 +1,53 @@
-from rest_framework.decorators import api_view, parser_classes
-from rest_framework.parsers import MultiPartParser
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 from .models import Provider, Customer
 from .serializers import (
     ProviderCreateSerializer, ProviderImageUploadSerializer, 
     CustomerSerializer, ProviderAIOnboardingSerializer
 )
+
+@api_view(['POST'])
+def login_view(request):
+    """
+    POST /api/login/
+    Validates user credentials.
+    """
+    email = request.data.get('email')
+    password = request.data.get('password')
+    keep_me_logged_in = request.data.get('keep_me_logged_in', False)
+
+    if not email or not password:
+        return Response(
+            {"message": "Email and password are required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response(
+            {"message": "Invalid credentials"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    if user.check_password(password):
+        # In a real app, we might create a token or session here
+        return Response(
+            {
+                "message": "Login successful",
+                "authenticated": True,
+                "user_id": user.id
+            },
+            status=status.HTTP_200_OK
+        )
+    else:
+        return Response(
+            {"message": "Invalid credentials"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
 
 @api_view(['POST'])
 def provider_create(request):

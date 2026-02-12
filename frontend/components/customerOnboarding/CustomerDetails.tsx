@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import Link from 'next/link';
 import { CustomerFormData } from '@/app/customerOnboarding/page';
 import { User, Camera, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
@@ -162,7 +163,7 @@ export default function CustomerDetails({ onSubmit, isSubmitting, error }: Custo
                 </button>
 
                 <p className="text-center text-sm text-[#64748B]">
-                    Already have an account? <span className="text-[#059669] font-bold cursor-pointer hover:underline">Log in</span>
+                    Already have an account? <span className="text-[#059669] font-bold cursor-pointer hover:underline"><Link href="/login">Log in</Link></span>
                 </p>
             </form>
         </div>

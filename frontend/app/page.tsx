@@ -76,9 +76,9 @@ export default function Home() {
               <span className="text-lg">🌐</span>
               <span className="tracking-tight">हिन्दी / EN</span>
             </button>
-            <Link href="#" className="px-4 py-2 text-sm font-bold hover:text-emerald-500 transition-colors">Login</Link>
-            <Link href="/providerOnboarding" className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95">
-              Join as Provider
+            <Link href="/login" className="px-4 py-2 text-sm font-bold hover:text-emerald-500 transition-colors">Login</Link>
+            <Link href="/#Onboarding" className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95">
+              Join
             </Link>
           </div>
         </div>
@@ -183,7 +183,7 @@ export default function Home() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-24 max-w-7xl mx-auto px-4">
+        <section className="py-24 max-w-7xl mx-auto px-4" id="Onboarding">
           <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
             <div className="bg-emerald-50 rounded-[3rem] p-12 lg:p-20 border border-emerald-1 relative overflow-hidden group">
               <div className="relative z-10">

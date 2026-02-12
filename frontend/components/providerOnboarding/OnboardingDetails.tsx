@@ -6,11 +6,13 @@ import type { OnboardingFormData } from "@/app/providerOnboarding/page";
 interface OnboardingDetailsProps {
     onSubmit: (data: OnboardingFormData) => void;
     isLoading: boolean;
+    onSwitchToAI: () => void;
 }
 
 export default function OnboardingDetails({
     onSubmit,
     isLoading,
+    onSwitchToAI,
 }: OnboardingDetailsProps) {
     const [formData, setFormData] = useState<OnboardingFormData>({
         name: "",
@@ -54,8 +56,8 @@ export default function OnboardingDetails({
                     field === "profilePicture"
                         ? "profile"
                         : field === "legalIdFront"
-                          ? "idFront"
-                          : "idBack";
+                            ? "idFront"
+                            : "idBack";
                 setPreviews((prev) => ({
                     ...prev,
                     [previewKey]: reader.result as string,
@@ -331,6 +333,13 @@ export default function OnboardingDetails({
                                 </span>
                             </>
                         )}
+                    </button>
+
+                    <button
+                        onClick={onSwitchToAI}
+                        className="bg-zinc-100 hover:bg-zinc-200 text-zinc-900 px-6 py-3 rounded-2xl font-black text-sm transition-all"
+                    >
+                        Switch to AI Onboarding
                     </button>
                 </form>
             </div>
