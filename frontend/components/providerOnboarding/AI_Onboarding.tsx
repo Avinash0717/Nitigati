@@ -13,6 +13,7 @@ import {
     RotateCcw,
     Loader2,
     Volume2,
+    Square,
 } from "lucide-react";
 
 /* ── Types ──────────────────────────────────────────────── */
@@ -20,6 +21,7 @@ import {
 export interface AIOnboardingFormData {
     transcript: string;
     extractedFields: Record<string, unknown>;
+    password: string;
     profilePicture: File | null;
     legalIdFront: File | null;
     legalIdBack: File | null;
@@ -60,6 +62,7 @@ export default function AI_Onboarding({
     // Recording state
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
     const [audioLevels, setAudioLevels] = useState<number[]>(
         new Array(9).fill(0),
     );
@@ -73,6 +76,15 @@ export default function AI_Onboarding({
         front: string | null;
         back: string | null;
     }>({ profile: null, front: null, back: null });
+
+    // Account fields
+    const [password, setPassword] = useState("");
+    const [gender, setGender] = useState("");
+    const [email, setEmail] = useState("");
+    const [phoneNumber, setPhoneNumber] = useState("");
+    const [location, setLocation] = useState("");
+    const [isReExtracting, setIsReExtracting] = useState(false);
+    const isReExtractingRef = useRef(false);
 
     // Refs
     const wsRef = useRef<WebSocket | null>(null);
@@ -99,6 +111,39 @@ export default function AI_Onboarding({
     useEffect(() => {
         phaseRef.current = phase;
     }, [phase]);
+
+    // Sync fields from LLM-extracted data
+    useEffect(() => {
+        if (
+            extractedFields.gender &&
+            typeof extractedFields.gender === "string" &&
+            !gender
+        ) {
+            setGender(extractedFields.gender);
+        }
+        if (
+            extractedFields.email &&
+            typeof extractedFields.email === "string" &&
+            !email
+        ) {
+            setEmail(extractedFields.email);
+        }
+        if (
+            extractedFields.phone_number &&
+            typeof extractedFields.phone_number === "string" &&
+            !phoneNumber
+        ) {
+            setPhoneNumber(extractedFields.phone_number);
+        }
+        if (
+            extractedFields.location &&
+            typeof extractedFields.location === "string" &&
+            !location
+        ) {
+            setLocation(extractedFields.location);
+        }
+        setIsReExtracting(false);
+    }, [extractedFields]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -157,19 +202,34 @@ export default function AI_Onboarding({
 
     /* ── TTS playback ───────────────────────────────────── */
 
+    const stopTTS = useCallback(() => {
+        if (audioPlayerRef.current) {
+            audioPlayerRef.current.pause();
+            audioPlayerRef.current.currentTime = 0;
+            audioPlayerRef.current = null;
+        }
+        setIsSpeaking(false);
+    }, []);
+
     const playTTS = useCallback((base64Mp3: string): Promise<void> => {
         return new Promise((resolve) => {
             const audio = new Audio(`data:audio/mp3;base64,${base64Mp3}`);
             audioPlayerRef.current = audio;
+            setIsSpeaking(true);
             audio.onended = () => {
                 audioPlayerRef.current = null;
+                setIsSpeaking(false);
                 resolve();
             };
             audio.onerror = () => {
                 audioPlayerRef.current = null;
+                setIsSpeaking(false);
                 resolve();
             };
-            audio.play().catch(() => resolve());
+            audio.play().catch(() => {
+                setIsSpeaking(false);
+                resolve();
+            });
         });
     }, []);
 
@@ -212,7 +272,12 @@ export default function AI_Onboarding({
                 case "analysis":
                     setExtractedFields(data.fields as Record<string, unknown>);
                     setMissingFields(data.missing as string[]);
-                    if (data.question) {
+                    if (isReExtractingRef.current) {
+                        // Re-extraction: always go back to complete so transcript stays editable
+                        setAiMessage("Fields updated from edited transcript.");
+                        setPhase("complete");
+                        isReExtractingRef.current = false;
+                    } else if (data.question) {
                         setAiMessage(data.question as string);
                         setPhase("asking");
                     }
@@ -225,6 +290,7 @@ export default function AI_Onboarding({
                         "All information collected. You can now upload your photos and complete setup.",
                     );
                     setPhase("complete");
+                    isReExtractingRef.current = false;
                     break;
 
                 case "error":
@@ -384,10 +450,25 @@ export default function AI_Onboarding({
         }
     };
 
+    /** Stop everything — kill TTS, stop recording, go back to listening-ready */
+    const handleInterrupt = () => {
+        stopTTS();
+        cleanupRecording();
+        // Stay in a "paused" state where transcript is kept but user can tap to resume
+        setPhase("listening");
+        setIsRecording(false);
+    };
+
     /** Mic toggle */
     const toggleRecording = () => {
         if (phase === "idle") {
             handleStart();
+        } else if (phase === "greeting" || phase === "asking") {
+            // Interrupt TTS — user wants to stop the AI mid-speech
+            handleInterrupt();
+        } else if (phase === "analyzing") {
+            // Let them cancel out of analyzing too
+            handleInterrupt();
         } else if (isRecording) {
             handleStopAndAnalyze();
         } else if (phase === "complete") {
@@ -412,11 +493,34 @@ export default function AI_Onboarding({
         wsRef.current = null;
     };
 
+    /** Send edited transcript to backend for re-extraction */
+    const handleReExtract = () => {
+        if (
+            !transcript.trim() ||
+            !wsRef.current ||
+            wsRef.current.readyState !== WebSocket.OPEN
+        )
+            return;
+        setIsReExtracting(true);
+        isReExtractingRef.current = true;
+        setPhase("analyzing");
+        wsRef.current.send(
+            JSON.stringify({ action: "re_analyze", transcript }),
+        );
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        // Merge manual overrides into extracted fields
+        const finalFields = { ...extractedFields };
+        if (gender) finalFields.gender = gender;
+        if (email) finalFields.email = email;
+        if (phoneNumber) finalFields.phone_number = phoneNumber;
+        if (location) finalFields.location = location;
         onSubmit({
             transcript,
-            extractedFields,
+            extractedFields: finalFields,
+            password,
             profilePicture,
             legalIdFront,
             legalIdBack,
@@ -434,10 +538,10 @@ export default function AI_Onboarding({
 
     const phaseLabel: Record<Phase, string> = {
         idle: "Ready to Start",
-        greeting: "AI Speaking",
-        listening: "Listening",
+        greeting: isSpeaking ? "AI Speaking" : "Connecting...",
+        listening: isRecording ? "Listening" : "Ready",
         analyzing: "Analyzing...",
-        asking: "AI Speaking",
+        asking: isSpeaking ? "AI Speaking" : "Follow-up",
         complete: "Complete",
     };
 
@@ -644,23 +748,40 @@ export default function AI_Onboarding({
                     )}
 
                     {/* Transcript Box */}
-                    {transcript && (
+                    {phase !== "idle" && (
                         <div className="w-full max-w-xl relative mb-8">
-                            <div className="bg-zinc-50 rounded-4xl p-8 border border-zinc-100 relative min-h-40 flex items-center justify-center">
+                            <div className="bg-zinc-50 rounded-4xl p-8 border border-zinc-100 relative min-h-40 flex flex-col justify-center">
                                 <span className="absolute left-6 top-6 text-4xl text-emerald-500/20 font-serif leading-none italic">
-                                    "
+                                    &ldquo;
                                 </span>
-                                <p className="text-sm font-black text-zinc-700 leading-relaxed italic pr-4">
-                                    {transcript}
-                                    {isTranscribing && (
-                                        <span className="text-zinc-400 ml-1">
-                                            transcribing…
-                                        </span>
-                                    )}
-                                    {isRecording && (
-                                        <span className="inline-block w-1.5 h-5 bg-emerald-400 ml-1 translate-y-1 animate-pulse" />
-                                    )}
-                                </p>
+                                <textarea
+                                    value={transcript}
+                                    onChange={(e) =>
+                                        setTranscript(e.target.value)
+                                    }
+                                    placeholder="Speak now — I'm listening..."
+                                    className="w-full bg-white border border-zinc-200 rounded-2xl p-4 text-sm font-bold text-zinc-700 leading-relaxed italic resize-y min-h-32 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 outline-none transition-all placeholder:text-zinc-400 placeholder:not-italic"
+                                />
+                                {isTranscribing && (
+                                    <span className="text-zinc-400 text-xs mt-1">
+                                        transcribing…
+                                    </span>
+                                )}
+                                {isRecording && (
+                                    <span className="inline-block w-1.5 h-5 bg-emerald-400 mt-2 animate-pulse rounded-full" />
+                                )}
+                                {transcript.trim() && !isRecording && (
+                                    <button
+                                        type="button"
+                                        onClick={handleReExtract}
+                                        disabled={isReExtracting}
+                                        className="mt-3 px-5 py-2.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl text-xs font-black uppercase tracking-wide transition-all disabled:opacity-50"
+                                    >
+                                        {isReExtracting
+                                            ? "Re-extracting..."
+                                            : "Re-extract from transcript"}
+                                    </button>
+                                )}
                             </div>
                             <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-8 h-8 bg-zinc-50 border-r border-b border-zinc-100 rotate-45" />
                         </div>
@@ -687,24 +808,30 @@ export default function AI_Onboarding({
                         />
                         <button
                             onClick={toggleRecording}
-                            disabled={
-                                phase === "analyzing" ||
-                                phase === "greeting" ||
-                                phase === "asking"
-                            }
+                            disabled={phase === "complete"}
                             className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed
                                 ${
                                     isRecording
                                         ? "bg-zinc-900 text-white scale-90"
-                                        : phase === "complete"
-                                          ? "bg-emerald-400 text-black"
-                                          : "bg-emerald-400 text-black hover:scale-110 shadow-emerald-400/30"
+                                        : isSpeaking ||
+                                            phase === "greeting" ||
+                                            phase === "asking"
+                                          ? "bg-red-500 text-white hover:bg-red-600 hover:scale-110 shadow-red-400/30"
+                                          : phase === "analyzing"
+                                            ? "bg-amber-400 text-white hover:bg-amber-500 hover:scale-110 shadow-amber-400/30"
+                                            : phase === "complete"
+                                              ? "bg-emerald-400 text-black"
+                                              : "bg-emerald-400 text-black hover:scale-110 shadow-emerald-400/30"
                                 }`}
                         >
                             {phase === "analyzing" ? (
-                                <Loader2 className="w-8 h-8 animate-spin" />
+                                <Square className="w-6 h-6 fill-current" />
                             ) : phase === "complete" ? (
                                 <Check className="w-8 h-8" />
+                            ) : isSpeaking ||
+                              phase === "greeting" ||
+                              phase === "asking" ? (
+                                <Square className="w-6 h-6 fill-current" />
                             ) : isRecording ? (
                                 <MicOff className="w-8 h-8" />
                             ) : (
@@ -718,19 +845,23 @@ export default function AI_Onboarding({
                             className={`text-sm font-black tracking-tight transition-colors ${
                                 isRecording
                                     ? "text-emerald-500"
-                                    : phase === "complete"
-                                      ? "text-emerald-600"
-                                      : "text-zinc-900"
+                                    : isSpeaking
+                                      ? "text-red-500"
+                                      : phase === "complete"
+                                        ? "text-emerald-600"
+                                        : "text-zinc-900"
                             }`}
                         >
                             {isRecording
                                 ? "Listening... (tap to stop & analyze)"
                                 : phase === "idle"
                                   ? "Tap to start conversation"
-                                  : phase === "greeting" || phase === "asking"
-                                    ? "AI is speaking..."
+                                  : isSpeaking ||
+                                      phase === "greeting" ||
+                                      phase === "asking"
+                                    ? "AI speaking — tap to interrupt"
                                     : phase === "analyzing"
-                                      ? "Processing..."
+                                      ? "Processing... (tap to cancel)"
                                       : phase === "complete"
                                         ? "Profile complete!"
                                         : "Tap to continue"}
@@ -755,6 +886,106 @@ export default function AI_Onboarding({
                         ))}
                     </div>
 
+                    {/* Account fields — always visible once conversation starts */}
+                    {phase !== "idle" && (
+                        <div className="w-full max-w-xl mb-8 space-y-4">
+                            <div className="bg-zinc-50 rounded-3xl p-6 border border-zinc-100 space-y-4">
+                                <h3 className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">
+                                    Account Setup
+                                </h3>
+                                {/* Gender selector */}
+                                <div>
+                                    <label className="block text-sm font-black text-zinc-900 mb-2">
+                                        Gender
+                                    </label>
+                                    <div className="flex gap-2">
+                                        {["Male", "Female", "Other"].map(
+                                            (g) => (
+                                                <button
+                                                    key={g}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setGender(
+                                                            g.toLowerCase(),
+                                                        )
+                                                    }
+                                                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all border ${
+                                                        gender.toLowerCase() ===
+                                                        g.toLowerCase()
+                                                            ? "bg-emerald-400 text-black border-emerald-500 shadow-sm"
+                                                            : "bg-white text-zinc-600 border-zinc-200 hover:border-emerald-300"
+                                                    }`}
+                                                >
+                                                    {g}
+                                                </button>
+                                            ),
+                                        )}
+                                    </div>
+                                </div>
+                                {/* Email */}
+                                <div>
+                                    <label className="block text-sm font-black text-zinc-900 mb-2">
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) =>
+                                            setEmail(e.target.value)
+                                        }
+                                        placeholder="your@email.com"
+                                        className="w-full bg-white border border-zinc-200 rounded-xl px-5 py-4 text-zinc-900 font-bold placeholder:text-zinc-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all"
+                                    />
+                                </div>
+                                {/* Phone Number */}
+                                <div>
+                                    <label className="block text-sm font-black text-zinc-900 mb-2">
+                                        Phone Number
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        value={phoneNumber}
+                                        onChange={(e) =>
+                                            setPhoneNumber(e.target.value)
+                                        }
+                                        placeholder="+91 98765 43210"
+                                        className="w-full bg-white border border-zinc-200 rounded-xl px-5 py-4 text-zinc-900 font-bold placeholder:text-zinc-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all"
+                                    />
+                                </div>
+                                {/* Location */}
+                                <div>
+                                    <label className="block text-sm font-black text-zinc-900 mb-2">
+                                        Location
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={location}
+                                        onChange={(e) =>
+                                            setLocation(e.target.value)
+                                        }
+                                        placeholder="Mumbai, India"
+                                        className="w-full bg-white border border-zinc-200 rounded-xl px-5 py-4 text-zinc-900 font-bold placeholder:text-zinc-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all"
+                                    />
+                                </div>
+                                {/* Password */}
+                                <div>
+                                    <label className="block text-sm font-black text-zinc-900 mb-2">
+                                        Set a Password
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) =>
+                                            setPassword(e.target.value)
+                                        }
+                                        placeholder="Create a secure password"
+                                        className="w-full bg-white border border-zinc-200 rounded-xl px-5 py-4 text-zinc-900 font-bold placeholder:text-zinc-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Action Bar */}
                     <div className="w-full pt-8 border-t border-zinc-100 flex flex-col sm:flex-row gap-4 justify-between items-center">
                         <div className="flex gap-3">
@@ -775,10 +1006,14 @@ export default function AI_Onboarding({
                         </div>
                         <button
                             onClick={handleSubmit}
-                            disabled={isLoading || phase !== "complete"}
+                            disabled={
+                                isLoading || phase !== "complete" || !password
+                            }
                             className={`px-10 py-4 rounded-2xl font-black text-sm flex items-center gap-3 transition-all active:scale-[0.98] shadow-lg
                                 ${
-                                    isLoading || phase !== "complete"
+                                    isLoading ||
+                                    phase !== "complete" ||
+                                    !password
                                         ? "bg-zinc-100 text-zinc-300 cursor-not-allowed shadow-none"
                                         : "bg-emerald-400 text-black hover:bg-emerald-500 shadow-emerald-400/20"
                                 }`}

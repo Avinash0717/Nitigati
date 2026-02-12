@@ -93,6 +93,15 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
 
             if action == "analyze":
                 await self._run_analysis()
+            elif action == "re_analyze":
+                # Client edited the transcript — override and re-extract
+                edited_transcript = msg.get("transcript", "")
+                logger.info("  ← re_analyze with edited transcript (%d chars)", len(edited_transcript))
+                logger.info("  OLD transcript: '%s'", self.transcript[:100] if self.transcript else '(empty)')
+                self.transcript = edited_transcript
+                logger.info("  NEW transcript: '%s'", self.transcript[:100])
+                self.fields = {}  # reset fields so LLM re-extracts from scratch
+                await self._run_analysis()
             elif action == "reset":
                 self.transcript = ""
                 self.fields = {}

@@ -61,12 +61,85 @@ class ProviderImageUploadSerializer(serializers.Serializer):
 
 
 class ProviderAIOnboardingSerializer(serializers.Serializer):
-    """Handles AI-based provider onboarding data collection."""
-    onboarding_type = serializers.ChoiceField(choices=[('ai', 'ai')], default='ai')
+    """Handles AI-based provider onboarding.
+    Receives extracted_fields (JSON string from LLM extraction),
+    password, transcript and images. Creates User + Provider.
+    """
     transcript = serializers.CharField(required=True)
-    profile_picture = serializers.ImageField(required=True)
-    legal_id_front = serializers.ImageField(required=True)
-    legal_id_back = serializers.ImageField(required=True)
+    extracted_fields = serializers.CharField(required=True)  # JSON string
+    password = serializers.CharField(write_only=True, required=True)
+    profile_picture = serializers.ImageField(required=False, allow_null=True)
+    legal_id_front = serializers.ImageField(required=False, allow_null=True)
+    legal_id_back = serializers.ImageField(required=False, allow_null=True)
+
+    def validate_extracted_fields(self, value):
+        import json
+        try:
+            parsed = json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            raise serializers.ValidationError("extracted_fields must be valid JSON.")
+        if not isinstance(parsed, dict):
+            raise serializers.ValidationError("extracted_fields must be a JSON object.")
+        # Require at minimum a name
+        if not parsed.get('name'):
+            raise serializers.ValidationError("Extracted fields must include a 'name'.")
+        return parsed  # store parsed dict in validated_data
+
+    def create(self, validated_data):
+        fields = validated_data['extracted_fields']  # already a dict
+        password = validated_data['password']
+
+        print(f"[SERIALIZER] create() called")
+        print(f"[SERIALIZER] extracted_fields received: {fields}")
+        print(f"[SERIALIZER] password present: {bool(password)}")
+
+        # Coerce None → safe defaults (LLM may return null for missing fields)
+        name = fields.get('name') or ''
+        age = fields.get('age')
+        gender = fields.get('gender') or ''
+        location = fields.get('location') or ''
+        phone_number = fields.get('phone_number') or ''
+        email = fields.get('email') or ''
+
+        print(f"[SERIALIZER] Coerced values:")
+        print(f"[SERIALIZER]   name = '{name}'")
+        print(f"[SERIALIZER]   age = {age} (type={type(age).__name__})")
+        print(f"[SERIALIZER]   gender = '{gender}'")
+        print(f"[SERIALIZER]   location = '{location}'")
+        print(f"[SERIALIZER]   phone_number = '{phone_number}'")
+        print(f"[SERIALIZER]   email = '{email}'")
+        print(f"[SERIALIZER]   profile_picture = {validated_data.get('profile_picture')}")
+        print(f"[SERIALIZER]   legal_id_front = {validated_data.get('legal_id_front')}")
+        print(f"[SERIALIZER]   legal_id_back = {validated_data.get('legal_id_back')}")
+
+        print(f"[SERIALIZER] Creating Provider...")
+        provider = Provider.objects.create(
+            onboarding_type='ai',
+            name=name,
+            age=age,
+            gender=gender,
+            location=location,
+            phone_number=phone_number,
+            email=email,
+            profile_picture=validated_data.get('profile_picture'),
+            legal_id_front=validated_data.get('legal_id_front'),
+            legal_id_back=validated_data.get('legal_id_back'),
+        )
+        print(f"[SERIALIZER] Provider created: uuid={provider.uuid}")
+
+        print(f"[SERIALIZER] Creating User with username={provider.uuid}...")
+        user = User.objects.create_user(
+            username=str(provider.uuid),
+            email=email,
+            password=password,
+            first_name=name,
+        )
+        print(f"[SERIALIZER] User created: id={user.id}, username={user.username}")
+
+        provider.user = user
+        provider.save(update_fields=['user'])
+        print(f"[SERIALIZER] Provider.user linked and saved")
+        return provider
 
 
 class CustomerSerializer(serializers.ModelSerializer):

@@ -18,7 +18,7 @@ def get_model():
         print(f"[Whisper] Loading '{_MODEL_SIZE}' model (first request, may take a moment)...")
         _model = WhisperModel(
             _MODEL_SIZE,
-            device="cuda" if torch_cuda_available() else "cpu",
+            device="cpu",
             compute_type="int8",  # Fast on CPU
         )
         print("[Whisper] Model loaded.")

@@ -29,8 +29,9 @@ export interface ProviderPayload extends OnboardingFormData {
 }
 
 export interface AIProviderPayload {
-    onboarding_type: "ai";
     transcript: string;
+    extracted_fields: string; // JSON string of extracted fields
+    password: string;
     profile_picture: File | null;
     legal_id_front: File | null;
     legal_id_back: File | null;
@@ -112,12 +113,12 @@ export default function ProviderOnboardingPage() {
 
         try {
             const payload = new FormData();
-            payload.append("onboarding_type", "ai");
             payload.append("transcript", formData.transcript);
             payload.append(
                 "extracted_fields",
                 JSON.stringify(formData.extractedFields),
             );
+            payload.append("password", formData.password);
 
             if (formData.profilePicture)
                 payload.append("profile_picture", formData.profilePicture);

@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 from .models import Provider, Customer
 from .serializers import (
     ProviderCreateSerializer, ProviderImageUploadSerializer, 
@@ -48,6 +49,7 @@ def login_view(request):
             {"message": "Invalid credentials"},
             status=status.HTTP_401_UNAUTHORIZED
         )
+from django.contrib.auth.models import User
 
 @api_view(['POST'])
 def provider_create(request):
@@ -174,22 +176,95 @@ def customer_create(request):
 def provider_ai_onboarding(request):
     """
     POST /api/providers/ai-onboarding/ (Multipart/form-data)
-    Validates AI onboarding data (transcript + images).
-    Does NOT save to DB or CSV.
+    Creates a Provider + User from AI-extracted fields, password, and images.
     """
+    print("\n" + "="*80)
+    print("[AI ONBOARDING] ===== REQUEST RECEIVED =====")
+    print(f"[AI ONBOARDING] Content-Type: {request.content_type}")
+    print(f"[AI ONBOARDING] Method: {request.method}")
+    print(f"[AI ONBOARDING] Raw data keys: {list(request.data.keys())}")
+    for key in request.data:
+        val = request.data[key]
+        if hasattr(val, 'name'):  # file
+            print(f"[AI ONBOARDING]   {key} = <File: {val.name}, size={val.size}>")
+        else:
+            print(f"[AI ONBOARDING]   {key} = {str(val)[:200]}")
+    print("="*80)
+
     serializer = ProviderAIOnboardingSerializer(data=request.data)
-    if serializer.is_valid():
-        # Extraction logic simulation (LLM parsing would happen here)
-        print("AI Onboarding Data Validated Successfully.")
-        print(f"Transcript: {serializer.validated_data['transcript'][:50]}...")
-        
+    print(f"[AI ONBOARDING] Serializer created: {type(serializer).__name__}")
+
+    is_valid = serializer.is_valid()
+    print(f"[AI ONBOARDING] is_valid() = {is_valid}")
+
+    if is_valid:
+        vd = serializer.validated_data
+        print(f"[AI ONBOARDING] validated_data keys: {list(vd.keys())}")
+        print(f"[AI ONBOARDING] transcript (first 100): {str(vd.get('transcript', ''))[:100]}")
+        print(f"[AI ONBOARDING] extracted_fields type: {type(vd.get('extracted_fields'))}")
+        extracted = vd.get('extracted_fields', {})
+        print(f"[AI ONBOARDING] extracted_fields: {extracted}")
+        print(f"[AI ONBOARDING] password present: {bool(vd.get('password'))}")
+        print(f"[AI ONBOARDING] profile_picture: {vd.get('profile_picture')}")
+        print(f"[AI ONBOARDING] legal_id_front: {vd.get('legal_id_front')}")
+        print(f"[AI ONBOARDING] legal_id_back: {vd.get('legal_id_back')}")
+
+        email = extracted.get('email', '') or ''
+        print(f"[AI ONBOARDING] email from extracted: '{email}'")
+
+        # Check duplicate email
+        if email:
+            dup = Provider.objects.filter(email=email).exists()
+            print(f"[AI ONBOARDING] duplicate email check: exists={dup}")
+            if dup:
+                print(f"[AI ONBOARDING] REJECTED — duplicate email: {email}")
+                return Response(
+                    {"detail": "A provider with this email already exists."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        print(f"[AI ONBOARDING] Calling serializer.save()...")
+        try:
+            provider = serializer.save()
+        except Exception as e:
+            print(f"[AI ONBOARDING] ERROR in serializer.save(): {e}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"detail": f"Failed to create provider: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        print(f"[AI ONBOARDING] Provider CREATED successfully!")
+        print(f"[AI ONBOARDING]   uuid: {provider.uuid}")
+        print(f"[AI ONBOARDING]   name: {provider.name}")
+        print(f"[AI ONBOARDING]   age: {provider.age}")
+        print(f"[AI ONBOARDING]   gender: {provider.gender}")
+        print(f"[AI ONBOARDING]   location: {provider.location}")
+        print(f"[AI ONBOARDING]   phone_number: {provider.phone_number}")
+        print(f"[AI ONBOARDING]   email: {provider.email}")
+        print(f"[AI ONBOARDING]   onboarding_type: {provider.onboarding_type}")
+        print(f"[AI ONBOARDING]   user: {provider.user}")
+        print(f"[AI ONBOARDING]   user.username: {provider.user.username if provider.user else 'N/A'}")
+        print(f"[AI ONBOARDING]   profile_picture: {provider.profile_picture}")
+        print(f"[AI ONBOARDING]   legal_id_front: {provider.legal_id_front}")
+        print(f"[AI ONBOARDING]   legal_id_back: {provider.legal_id_back}")
+        print(f"[AI ONBOARDING]   created_at: {provider.created_at}")
+        print("="*80 + "\n")
+
         return Response(
             {
-                "message": "AI onboarding data received and validated successfully"
+                "uuid": str(provider.uuid),
+                "message": "AI onboarding complete. Provider created successfully."
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_201_CREATED
         )
-    
+
+    print(f"[AI ONBOARDING] VALIDATION FAILED")
+    print(f"[AI ONBOARDING] errors: {serializer.errors}")
+    for field, errs in serializer.errors.items():
+        print(f"[AI ONBOARDING]   {field}: {errs}")
+    print("="*80 + "\n")
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -240,3 +315,64 @@ def provider_dashboard_summary(request):
     }
     
     return Response(summary_data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def login(request):
+    """
+    POST /api/login/
+    Body: { "email": "...", "password": "..." }
+    Authenticates against Django User model (unified for Provider and Customer).
+    Returns 200 with user role and uuid on success.
+    """
+    email = request.data.get('email', '').strip()
+    password = request.data.get('password', '')
+
+    if not email or not password:
+        return Response(
+            {"detail": "Email and password are required."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Django's authenticate() uses username, but we store email as username
+    
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response(
+            {"detail": "Invalid email or password."},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    user = authenticate(username=user.username, password=password)
+    if user is None:
+        return Response(
+            {"detail": "Invalid email or password."},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    # Determine role
+    role = None
+    uuid = None
+    if hasattr(user, 'provider_profile'):
+        role = 'provider'
+        uuid = str(user.provider_profile.uuid)
+    elif hasattr(user, 'customer_profile'):
+        role = 'customer'
+        uuid = str(user.customer_profile.uuid)
+    else:
+        return Response(
+            {"detail": "User has no associated profile."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    return Response(
+        {
+            "message": "Login successful.",
+            "role": role,
+            "uuid": uuid,
+            "email": email,
+            "name": user.first_name or user.username,
+        },
+        status=status.HTTP_200_OK
+    )
