@@ -191,3 +191,52 @@ def provider_ai_onboarding(request):
         )
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def provider_dashboard_summary(request):
+    """
+    GET /api/provider-dashboard/summary/
+    Returns a structured summary object for the provider dashboard.
+    """
+    # In a real app, we would fetch the current authenticated provider
+    # For now, we return mock stats based on the UI design requirements.
+    
+    summary_data = {
+        "verification_status": "In Progress",
+        "trust_badge": "Rising Talent",
+        "trust_badge_detail": "Based on your 98% job success rate and excellent client feedback over the last 2 weeks.",
+        "total_earnings": 12840.00,
+        "active_orders": 24,
+        "provider_rating": 4.92,
+        "job_success_rate": 98.4,
+        "recent_orders": [
+            {
+                "id": 1,
+                "title": "Corporate Logo Design",
+                "client": "GreenTech Solutions",
+                "amount": 450.00,
+                "status": "In Progress"
+            },
+            {
+                "id": 2,
+                "title": "UI/UX Audit",
+                "client": "SwiftPay App",
+                "amount": 1200.00,
+                "status": "Pending Review"
+            },
+            {
+                "id": 3,
+                "title": "Mobile Landing Page",
+                "client": "Fitness Hub",
+                "amount": 320.00,
+                "status": "Completed"
+            }
+        ],
+        "earnings_statistics": {
+            "this_month": [30, 45, 35, 90, 40, 60, 35],
+            "last_month": [20, 30, 40, 30, 50, 40, 30]
+        },
+        "pending_payout": 2140.50
+    }
+    
+    return Response(summary_data, status=status.HTTP_200_OK)

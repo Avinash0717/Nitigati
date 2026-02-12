@@ -8,4 +8,5 @@ urlpatterns = [
     path("providers/ai-onboarding/", views.provider_ai_onboarding, name="provider-ai-onboarding"),
     path("customers/", views.customer_create, name="customer-create"),
     path("login/", views.login_view, name="login"),
+    path("provider-dashboard/summary/", views.provider_dashboard_summary, name="provider-dashboard-summary"),
 ]
