@@ -8,7 +8,7 @@ from .models import Provider, Customer
 from .serializers import (
     ProviderCreateSerializer, ProviderImageUploadSerializer, 
     CustomerSerializer, ProviderAIOnboardingSerializer,
-    ServiceCreateSerializer
+    ServiceCreateSerializer, ServiceReadSerializer
 )
 
 # @api_view(['POST'])
@@ -411,3 +411,64 @@ def service_create(request):
         )
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def provider_services_list(request):
+    """
+    GET /api/services/
+    Returns all services for the current provider.
+    """
+    # Assuming we can filter by provider (mocking for now with sample data)
+    services = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "title": "Professional Woodworking",
+            "tags": ["HOME REPAIR", "WOODWORK"],
+            "image": "https://images.unsplash.com/photo-1581141849291-1125c7b692b5?w=400&h=300&fit=crop",
+            "verification_status": "Verified",
+            "price_range": "₹500 - ₹2,000"
+        },
+        {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "title": "Expert Electrical Service",
+            "tags": ["ELECTRICAL", "INSTALLATION"],
+            "image": "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&h=300&fit=crop",
+            "verification_status": "Verified",
+            "price_range": "₹800 - ₹5,000"
+        },
+        {
+            "id": "33333333-3333-3333-3333-333333333333",
+            "title": "Deep Home Cleaning",
+            "tags": ["SANITATION", "HOUSEKEEPING"],
+            "image": "https://images.unsplash.com/photo-1581578731548-c64695ce6958?w=400&h=300&fit=crop",
+            "verification_status": "Verified",
+            "price_range": "₹1,200 - ₹4,500"
+        }
+    ]
+    
+    return Response(services, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+def service_detail(request, uuid):
+    """
+    GET /api/services/<uuid>/
+    Returns full details for a single service.
+    """
+    # Mocking single service detail
+    detail = {
+        "id": str(uuid),
+        "title": "Professional Woodworking",
+        "description": "I provide high-quality woodworking services for home maintenance and custom furniture repair. With over 8 years of experience, I ensure precision and durability in every project. My approach combines traditional craftsmanship with modern techniques to deliver exceptional results.",
+        "tags": ["HOME REPAIR", "WOODWORK", "RENOVATION"],
+        "images": [
+            "https://images.unsplash.com/photo-1581141849291-1125c7b692b5?w=800&h=600&fit=crop",
+            "https://images.unsplash.com/photo-1552330614-3709dec866a1?w=800&h=600&fit=crop",
+            "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=800&h=600&fit=crop"
+        ],
+        "verification_status": "Verified",
+        "price_range": "₹500 - ₹2,000",
+        "provider_id": "99999999-9999-9999-9999-999999999999",
+        "created_at": "2024-01-01T00:00:00Z"
+    }
+    
+    return Response(detail, status=status.HTTP_200_OK)

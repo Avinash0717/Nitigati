@@ -19,7 +19,8 @@ import {
 // Components
 import Dashboard from "@/components/providerDashboard/Dashboard";
 import ProviderMessages from "@/components/providerDashboard/ProviderMessages";
-import ProviderServices from "@/components/providerDashboard/ProviderServices";
+import ProviderServices from "@/components/providerDashboard/providerServices/ProviderServicesLobby";
+import ProviderServicePage from "@/components/providerDashboard/providerServices/ProviderServicePage";
 import ProviderOrders from "@/components/providerDashboard/ProviderOrders";
 
 // Interfaces
@@ -47,7 +48,28 @@ interface DashboardData {
     pending_payout: number;
 }
 
-type ViewType = "dashboard" | "messages" | "services" | "orders";
+export interface ServiceSummary {
+    id: string;
+    title: string;
+    tags: string[];
+    image: string;
+    verification_status: string;
+    price_range: string;
+}
+
+export interface ServiceDetail {
+    id: string;
+    title: string;
+    description: string;
+    tags: string[];
+    images: string[];
+    verification_status: string;
+    price_range: string;
+    provider_id: string;
+    created_at: string;
+}
+
+type ViewType = "dashboard" | "messages" | "services" | "orders" | "service_detail";
 
 export default function ProviderDashboardPage() {
     const [activeView, setActiveView] = useState<ViewType>("dashboard");
@@ -55,10 +77,15 @@ export default function ProviderDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Services State
+    const [services, setServices] = useState<ServiceSummary[]>([]);
+    const [selectedService, setSelectedService] = useState<ServiceDetail | null>(null);
+    const [servicesLoading, setServicesLoading] = useState(false);
+
     useEffect(() => {
         async function fetchDashboardData() {
             try {
-                const response = await fetch("/api/providerDashboard/dashboard");
+                const response = await fetch("/api/providers/providerDashboard/dashboard");
                 if (!response.ok) throw new Error("Failed to fetch dashboard data");
                 const result = await response.json();
                 setData(result);
@@ -72,6 +99,38 @@ export default function ProviderDashboardPage() {
 
         fetchDashboardData();
     }, []);
+
+    const fetchServices = async () => {
+        setServicesLoading(true);
+        try {
+            const response = await fetch("/api/providers/providerDashboard/services");
+            if (!response.ok) throw new Error("Failed to fetch services");
+            const result = await response.json();
+            setServices(result);
+            setActiveView("services");
+        } catch (err) {
+            console.error("Error fetching services:", err);
+            setError("Failed to load services.");
+        } finally {
+            setServicesLoading(false);
+        }
+    };
+
+    const fetchServiceDetail = async (id: string) => {
+        setServicesLoading(true);
+        try {
+            const response = await fetch(`/api/providers/providerDashboard/services?id=${id}`);
+            if (!response.ok) throw new Error("Failed to fetch service details");
+            const result = await response.json();
+            setSelectedService(result);
+            setActiveView("service_detail");
+        } catch (err) {
+            console.error("Error fetching service detail:", err);
+            setError("Failed to load service details.");
+        } finally {
+            setServicesLoading(false);
+        }
+    };
 
     const renderContent = () => {
         if (loading) {
@@ -103,7 +162,20 @@ export default function ProviderDashboardPage() {
             case "messages":
                 return <ProviderMessages />;
             case "services":
-                return <ProviderServices />;
+                return (
+                    <ProviderServices
+                        services={services}
+                        onServiceClick={fetchServiceDetail}
+                        loading={servicesLoading}
+                    />
+                );
+            case "service_detail":
+                return selectedService ? (
+                    <ProviderServicePage
+                        service={selectedService}
+                        onBack={() => setActiveView("services")}
+                    />
+                ) : null;
             case "orders":
                 return <ProviderOrders />;
             default:
@@ -136,8 +208,14 @@ export default function ProviderDashboardPage() {
                     {navItems.map((item) => (
                         <button
                             key={item.id}
-                            onClick={() => setActiveView(item.id as ViewType)}
-                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${activeView === item.id
+                            onClick={() => {
+                                if (item.id === "services") {
+                                    fetchServices();
+                                } else {
+                                    setActiveView(item.id as ViewType);
+                                }
+                            }}
+                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${activeView === item.id || (item.id === 'services' && activeView === 'service_detail')
                                 ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
                                 : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
                                 }`}

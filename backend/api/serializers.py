@@ -203,3 +203,16 @@ class ServiceCreateSerializer(serializers.Serializer):
         if data['price_min'] > data['price_max']:
             raise serializers.ValidationError("Minimum price cannot be greater than maximum price.")
         return data
+
+
+class ServiceReadSerializer(serializers.Serializer):
+    """Handles data for service display."""
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    description = serializers.CharField()
+    tags = serializers.JSONField()  # Assuming tags are stored/returned as a list
+    images = serializers.JSONField()  # List of image URLs
+    verification_status = serializers.CharField()
+    price_range = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    provider_id = serializers.UUIDField()

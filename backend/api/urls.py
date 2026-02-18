@@ -10,4 +10,6 @@ urlpatterns = [
     path("provider-dashboard/summary/", views.provider_dashboard_summary, name="provider-dashboard-summary"),
     path("login/", views.login, name="login"),
     path("services/create/", views.service_create, name="service-create"),
+    path("services/", views.provider_services_list, name="provider-services-list"),
+    path("services/<uuid:uuid>/", views.service_detail, name="service-detail"),
 ]
