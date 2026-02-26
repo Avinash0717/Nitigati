@@ -13,7 +13,7 @@ import {
     Plus,
     LogOut,
     ChevronRight,
-    User
+    User,
 } from "lucide-react";
 
 // Components
@@ -22,7 +22,7 @@ import ProviderMessages from "@/components/providerDashboard/ProviderMessages";
 import ProviderServices from "@/components/providerDashboard/providerServices/ProviderServicesLobby";
 import ProviderServicePage from "@/components/providerDashboard/providerServices/ProviderServicePage";
 import ProviderOrders from "@/components/providerDashboard/ProviderOrders";
-
+import SessionManager from "@/components/Auth/SessionManager";
 // Interfaces
 interface RecentOrder {
     id: number;
@@ -69,7 +69,12 @@ export interface ServiceDetail {
     created_at: string;
 }
 
-type ViewType = "dashboard" | "messages" | "services" | "orders" | "service_detail";
+type ViewType =
+    | "dashboard"
+    | "messages"
+    | "services"
+    | "orders"
+    | "service_detail";
 
 export default function ProviderDashboardPage() {
     const [activeView, setActiveView] = useState<ViewType>("dashboard");
@@ -79,14 +84,18 @@ export default function ProviderDashboardPage() {
 
     // Services State
     const [services, setServices] = useState<ServiceSummary[]>([]);
-    const [selectedService, setSelectedService] = useState<ServiceDetail | null>(null);
+    const [selectedService, setSelectedService] =
+        useState<ServiceDetail | null>(null);
     const [servicesLoading, setServicesLoading] = useState(false);
 
     useEffect(() => {
         async function fetchDashboardData() {
             try {
-                const response = await fetch("/api/providers/providerDashboard/dashboard");
-                if (!response.ok) throw new Error("Failed to fetch dashboard data");
+                const response = await fetch(
+                    "/api/providers/providerDashboard/dashboard",
+                );
+                if (!response.ok)
+                    throw new Error("Failed to fetch dashboard data");
                 const result = await response.json();
                 setData(result);
             } catch (err) {
@@ -103,7 +112,9 @@ export default function ProviderDashboardPage() {
     const fetchServices = async () => {
         setServicesLoading(true);
         try {
-            const response = await fetch("/api/providers/providerDashboard/services");
+            const response = await fetch(
+                "/api/providers/providerDashboard/services",
+            );
             if (!response.ok) throw new Error("Failed to fetch services");
             const result = await response.json();
             setServices(result);
@@ -119,8 +130,11 @@ export default function ProviderDashboardPage() {
     const fetchServiceDetail = async (id: string) => {
         setServicesLoading(true);
         try {
-            const response = await fetch(`/api/providers/providerDashboard/services?id=${id}`);
-            if (!response.ok) throw new Error("Failed to fetch service details");
+            const response = await fetch(
+                `/api/providers/providerDashboard/services?id=${id}`,
+            );
+            if (!response.ok)
+                throw new Error("Failed to fetch service details");
             const result = await response.json();
             setSelectedService(result);
             setActiveView("service_detail");
@@ -144,7 +158,9 @@ export default function ProviderDashboardPage() {
         if (error) {
             return (
                 <div className="bg-red-50 text-red-600 p-8 rounded-[2rem] border border-red-100 text-center max-w-md mx-auto mt-20">
-                    <p className="font-black mb-4">Oops! Something went wrong.</p>
+                    <p className="font-black mb-4">
+                        Oops! Something went wrong.
+                    </p>
                     <p className="text-sm font-medium mb-6">{error}</p>
                     <button
                         onClick={() => window.location.reload()}
@@ -190,17 +206,25 @@ export default function ProviderDashboardPage() {
         { id: "orders", label: "Orders", icon: ShoppingBag },
     ];
 
+    let sessionManager = new SessionManager();
+
     return (
         <div className="min-h-screen bg-[#f8fafb] font-sans selection:bg-emerald-100 selection:text-emerald-900 flex">
             {/* Sidebar */}
             <aside className="w-72 bg-white border-r border-zinc-100 flex flex-col p-8 fixed h-full z-20">
                 <Link href="/" className="flex items-center gap-3 group mb-16">
                     <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 shadow-lg shadow-emerald-500/20">
-                        <span className="text-white font-black text-2xl italic pt-1">N</span>
+                        <span className="text-white font-black text-2xl italic pt-1">
+                            N
+                        </span>
                     </div>
                     <div>
-                        <span className="text-2xl font-black tracking-tighter block leading-none">Nitigati</span>
-                        <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400">Provider Portal</span>
+                        <span className="text-2xl font-black tracking-tighter block leading-none">
+                            Nitigati
+                        </span>
+                        <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400">
+                            Provider Portal
+                        </span>
                     </div>
                 </Link>
 
@@ -215,25 +239,45 @@ export default function ProviderDashboardPage() {
                                     setActiveView(item.id as ViewType);
                                 }
                             }}
-                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${activeView === item.id || (item.id === 'services' && activeView === 'service_detail')
-                                ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
-                                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
-                                }`}
+                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${
+                                activeView === item.id ||
+                                (item.id === "services" &&
+                                    activeView === "service_detail")
+                                    ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
+                                    : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
+                            }`}
                         >
-                            <item.icon size={22} className={`${activeView === item.id ? "text-white" : "text-zinc-400 group-hover:text-emerald-500"} transition-colors`} />
+                            <item.icon
+                                size={22}
+                                className={`${activeView === item.id ? "text-white" : "text-zinc-400 group-hover:text-emerald-500"} transition-colors`}
+                            />
                             <span className="text-sm">{item.label}</span>
-                            {activeView === item.id && <ChevronRight size={16} className="ml-auto opacity-50" />}
+                            {activeView === item.id && (
+                                <ChevronRight
+                                    size={16}
+                                    className="ml-auto opacity-50"
+                                />
+                            )}
                         </button>
                     ))}
                 </nav>
 
                 <div className="pt-8 mt-8 border-t border-zinc-50 space-y-2">
                     <button className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold transition-all group">
-                        <Settings size={22} className="text-zinc-400 group-hover:text-emerald-500 transition-colors" />
+                        <Settings
+                            size={22}
+                            className="text-zinc-400 group-hover:text-emerald-500 transition-colors"
+                        />
                         <span className="text-sm">Settings</span>
                     </button>
-                    <Link href="/login" className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-500 hover:bg-red-50 font-bold transition-all group mt-2">
-                        <LogOut size={22} className="text-red-400 group-hover:text-red-600 transition-colors" />
+                    <Link
+                        href="/login"
+                        className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-500 hover:bg-red-50 font-bold transition-all group mt-2"
+                    >
+                        <LogOut
+                            size={22}
+                            className="text-red-400 group-hover:text-red-600 transition-colors"
+                        />
                         <span className="text-sm">Logout</span>
                     </Link>
                 </div>
@@ -241,11 +285,19 @@ export default function ProviderDashboardPage() {
                 {/* User Mini Profile */}
                 <div className="mt-12 flex items-center gap-4 p-2 bg-zinc-50/50 rounded-2xl border border-zinc-100/50">
                     <div className="w-12 h-12 bg-zinc-200 rounded-xl overflow-hidden border-2 border-white shadow-sm">
-                        <img src="https://ui-avatars.com/api/?name=Alex+Rivera&background=00ff7f&color=fff" alt="Alex Rivera" className="w-full h-full object-cover" />
+                        <img
+                            src="https://ui-avatars.com/api/?name=Alex+Rivera&background=00ff7f&color=fff"
+                            alt="Alex Rivera"
+                            className="w-full h-full object-cover"
+                        />
                     </div>
                     <div className="flex-1 overflow-hidden">
-                        <p className="text-xs font-black text-zinc-900 truncate">Alex Rivera</p>
-                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Pro Tier</p>
+                        <p className="text-xs font-black text-zinc-900 truncate">
+                            Alex Rivera
+                        </p>
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
+                            Pro Tier
+                        </p>
                     </div>
                 </div>
             </aside>
@@ -267,10 +319,16 @@ export default function ProviderDashboardPage() {
 
                     <div className="flex items-center gap-6">
                         <button className="relative w-12 h-12 bg-white rounded-2xl border border-zinc-100 flex items-center justify-center text-zinc-400 hover:bg-emerald-50 hover:text-emerald-500 transition-all group shadow-sm">
-                            <Bell size={20} className="group-hover:rotate-12 transition-transform" />
+                            <Bell
+                                size={20}
+                                className="group-hover:rotate-12 transition-transform"
+                            />
                             <span className="absolute top-3.5 right-3.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
                         </button>
-                        <Link href="/newServiceForm" className="h-12 bg-emerald-500 hover:bg-emerald-600 text-white px-8 rounded-2xl flex items-center gap-3 font-black text-xs transition-all active:scale-95 shadow-lg shadow-emerald-500/20">
+                        <Link
+                            href="/newServiceForm"
+                            className="h-12 bg-emerald-500 hover:bg-emerald-600 text-white px-8 rounded-2xl flex items-center gap-3 font-black text-xs transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                        >
                             <Plus size={18} />
                             <span>Create New Service</span>
                         </Link>

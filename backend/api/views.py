@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,46 +11,10 @@ from .serializers import (
     CustomerSerializer, ProviderAIOnboardingSerializer,
     ServiceCreateSerializer, ServiceReadSerializer
 )
-
-# @api_view(['POST'])
-# def login_view(request):
-#     """
-#     POST /api/login/
-#     Validates user credentials.
-#     """
-#     email = request.data.get('email')
-#     password = request.data.get('password')
-#     keep_me_logged_in = request.data.get('keep_me_logged_in', False)
-
-#     if not email or not password:
-#         return Response(
-#             {"message": "Email and password are required"},
-#             status=status.HTTP_400_BAD_REQUEST
-#         )
-
-#     try:
-#         user = User.objects.get(email=email)
-#     except User.DoesNotExist:
-#         return Response(
-#             {"message": "Invalid credentials"},
-#             status=status.HTTP_401_UNAUTHORIZED
-#         )
-
-#     if user.check_password(password):
-#         # In a real app, we might create a token or session here
-#         return Response(
-#             {
-#                 "message": "Login successful",
-#                 "authenticated": True,
-#                 "user_id": user.id
-#             },
-#             status=status.HTTP_200_OK
-#         )
-#     else:
-#         return Response(
-#             {"message": "Invalid credentials"},
-#             status=status.HTTP_401_UNAUTHORIZED
-#         )
+from rest_framework.authtoken.models import Token # type: ignore
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication # type: ignore
+from rest_framework.permissions import IsAuthenticated # type: ignore
+from rest_framework.decorators import authentication_classes, permission_classes, parser_classes # type: ignore
 
 @api_view(['POST'])
 def provider_create(request):
@@ -58,6 +23,7 @@ def provider_create(request):
     1. Validates text fields.
     2. Creates a Django User and links it to the Provider.
     3. Stores initial record with empty image fields.
+    3. returns session token and provider UUID for next steps.
     """
     serializer = ProviderCreateSerializer(data=request.data)
     if serializer.is_valid():
@@ -72,9 +38,10 @@ def provider_create(request):
         
         # Save to DB — creates User + Provider in serializer.create()
         provider = serializer.save()
-        
+        token = Token.objects.create(user=provider.user)  # type: ignore
         return Response(
             {
+                "token": token.key,
                 "uuid": str(provider.uuid),
                 "message": "Provider record created. Please upload images to complete registration."
             },
@@ -108,13 +75,57 @@ def provider_upload_images(request):
         provider.legal_id_front = serializer.validated_data['legal_id_front']
         provider.legal_id_back = serializer.validated_data['legal_id_back']
         provider.save(update_fields=['profile_picture', 'legal_id_front', 'legal_id_back'])
-        
+        token = Token.objects.create(user=provider.user)  # type: ignore
         return Response(
-            {"message": "Images uploaded and registration complete."},
+            {"message": "Images uploaded and registration complete.", "token": token.key},
             status=status.HTTP_200_OK
         )
             
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+def login(request):
+    """
+    POST /api/login/
+    Body: { "email": "...", "password": "..." }
+    Authenticates against Django User model (unified for Provider and Customer).
+    Returns 200 with user role and uuid on success.
+    """
+    email = request.data.get('email', '').strip()
+    password = request.data.get('password', '')
+
+    if not email or not password:
+        return Response(
+            {"detail": "Email and password are required."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    user = get_object_or_404(User, email=email)
+    if not user.check_password(request.data['password']):
+        return Response(
+            {"detail": "Invalid email or password."},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    token, _ = Token.objects.get_or_create(user=user) # type: ignore ; token, created
+    return Response({
+        "token": token.key,
+        "uuid": str(user.username),
+        "role": "provider" if hasattr(user, 'provider') else "customer"
+    }, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+def logout(request):
+    """
+    pass
+    """
+    return Response({}, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@authentication_classes([SessionAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def test_token(request):
+	return Response({'detail': 'Token is valid'}, status=status.HTTP_200_OK)
+
+
 
 @api_view(['GET'])
 def provider_detail(request, uuid):
@@ -397,6 +408,8 @@ def service_create(request):
         # Log received files for verification
         images = request.FILES.getlist('service_images')
         certs = request.FILES.getlist('certifications')
+
+        print("[SERVICE VALIDATED DATA] ", serializer.validated_data)
         
         print(f"[SERVICE CREATE] Title: {serializer.validated_data['service_title']}")
         print(f"[SERVICE CREATE] Images received: {len(images)}")

@@ -41,3 +41,18 @@ class Customer(models.Model):
 	phone_number = models.CharField(max_length=20)
 	profile_picture = models.ImageField(upload_to=customer_image_path, blank=True, null=True)
 	created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Service(models.Model):
+	uuid = models.UUIDField(default=uuid4, editable=False, unique=True, primary_key=True)
+	title = models.CharField(max_length=255)
+	description = models.TextField()
+	tags = models.CharField(max_length=255, blank=True, default='')
+	type = models.CharField(max_length=20, choices=[('remote', 'Remote'), ('visit', 'Visit')])
+	price_min = models.DecimalField(max_digits=10, decimal_places=2)
+	price_max = models.DecimalField(max_digits=10, decimal_places=2)
+	created_at = models.DateTimeField(auto_now_add=True)
+	images_uploaded = models.BooleanField(default=False)
+
+	def __str__(self):
+		return self.title

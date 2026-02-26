@@ -3,7 +3,7 @@ from rest_framework import serializers
 from .models import Provider, Customer
 import json
 import uuid
-
+import json
 
 class ProviderCreateSerializer(serializers.ModelSerializer):
     """Handles text data for provider creation (JSON).
@@ -61,6 +61,10 @@ class ProviderImageUploadSerializer(serializers.Serializer):
     legal_id_front = serializers.ImageField(required=True)
     legal_id_back = serializers.ImageField(required=True)
 
+class LoginSerializer(serializers.Serializer):
+    """Handles login data."""
+    email = serializers.CharField(max_length=255)
+    password = serializers.CharField(write_only=True)
 
 class ProviderAIOnboardingSerializer(serializers.Serializer):
     """Handles AI-based provider onboarding.
@@ -75,7 +79,7 @@ class ProviderAIOnboardingSerializer(serializers.Serializer):
     legal_id_back = serializers.ImageField(required=False, allow_null=True)
 
     def validate_extracted_fields(self, value):
-        import json
+        
         try:
             parsed = json.loads(value)
         except (json.JSONDecodeError, TypeError):
