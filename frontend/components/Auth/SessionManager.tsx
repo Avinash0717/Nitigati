@@ -4,13 +4,11 @@ class SessionManager {
     isLoggedIn: boolean;
     authToken: string | null;
     cookie: any;
-    setCookie: any;
     constructor() {
-        const [cookie, setCookie] = useCookies();
+        const cookie = useCookies();
         this.cookie = cookie;
-        this.setCookie = setCookie;
-        this.isLoggedIn = !!cookie.authToken;
-        this.authToken = cookie.authToken || null;
+        this.isLoggedIn = !!cookie.get("authToken");
+        this.authToken = cookie.get("authToken") || null;
         if (this.isLoggedIn) {
             console.log("SessionManager: Logged in");
         } else {
@@ -30,7 +28,7 @@ class SessionManager {
     // set token in cookies
     setToken(token: string): void {
         this.authToken = token;
-        this.setCookie("authToken", token, {
+        this.cookie.set("authToken", token, {
             path: "/",
             maxAge: 60 * 60 * 24 * 7, // 1 week
             httpOnly: true,
@@ -40,10 +38,8 @@ class SessionManager {
     // clear token from cookies
     clearToken(): void {
         this.authToken = null;
-        this.setCookie("authToken", null, {
+        this.cookie.remove("authToken", {
             path: "/",
-            maxAge: -1,
-            httpOnly: true,
         });
     }
 
