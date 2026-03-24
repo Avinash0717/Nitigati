@@ -22,7 +22,7 @@ import ProviderMessages from "@/components/providerDashboard/ProviderMessages";
 import ProviderServices from "@/components/providerDashboard/providerServices/ProviderServicesLobby";
 import ProviderServicePage from "@/components/providerDashboard/providerServices/ProviderServicePage";
 import ProviderOrders from "@/components/providerDashboard/ProviderOrders";
-import SessionManager from "@/components/Auth/SessionManager";
+import { useSessionManager } from "@/components/Auth/SessionManager";
 // Interfaces
 interface RecentOrder {
     id: number;
@@ -206,7 +206,7 @@ export default function ProviderDashboardPage() {
         { id: "orders", label: "Orders", icon: ShoppingBag },
     ];
 
-    let sessionManager = new SessionManager();
+    const sessionManager = useSessionManager();
 
     return (
         <div className="min-h-screen bg-[#f8fafb] font-sans selection:bg-emerald-100 selection:text-emerald-900 flex">
@@ -272,6 +272,7 @@ export default function ProviderDashboardPage() {
                     </button>
                     <Link
                         href="/login"
+                        onClick={() => sessionManager.clearToken()}
                         className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-500 hover:bg-red-50 font-bold transition-all group mt-2"
                     >
                         <LogOut

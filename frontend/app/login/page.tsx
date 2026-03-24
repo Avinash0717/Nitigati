@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Mail, Eye, EyeOff, ArrowRight, User, Briefcase, HelpCircle } from "lucide-react";
+import {
+    Mail,
+    Eye,
+    EyeOff,
+    ArrowRight,
+    User,
+    Briefcase,
+    HelpCircle,
+} from "lucide-react";
+import { useSessionManager } from "@/components/Auth/SessionManager";
 
 interface LoginFormData {
     email: string;
@@ -13,6 +22,7 @@ interface LoginFormData {
 
 interface LoginResponse {
     message: string;
+    token?: string;
     authenticated?: boolean;
 }
 
@@ -26,6 +36,7 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const sessionManager = useSessionManager();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
@@ -50,9 +61,11 @@ export default function LoginPage() {
             });
 
             const data: LoginResponse = await response.json();
-
-            if (response.ok && data.authenticated) {
+            if (response.ok && data.token) {
+                sessionManager.setToken(data.token);
                 router.push("/customerDashboard");
+            } else if (response.ok) {
+                setError("Login succeeded but no session token was returned.");
             } else {
                 setError(data.message || "Invalid credentials");
             }
@@ -70,11 +83,18 @@ export default function LoginPage() {
             <header className="p-6 flex justify-between items-center bg-white/50 backdrop-blur-sm fixed top-0 left-0 right-0 z-10">
                 <Link href="/" className="flex items-center gap-2 group">
                     <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 shadow-lg shadow-emerald-500/20">
-                        <span className="text-white font-black text-xl italic pt-1">N</span>
+                        <span className="text-white font-black text-xl italic pt-1">
+                            N
+                        </span>
                     </div>
-                    <span className="text-2xl font-black tracking-tight pt-1">Nitigati</span>
+                    <span className="text-2xl font-black tracking-tight pt-1">
+                        Nitigati
+                    </span>
                 </Link>
-                <Link href="#" className="text-zinc-500 hover:text-zinc-900 transition-colors flex items-center gap-2 font-medium">
+                <Link
+                    href="#"
+                    className="text-zinc-500 hover:text-zinc-900 transition-colors flex items-center gap-2 font-medium"
+                >
                     <HelpCircle size={20} />
                     <span>Help</span>
                 </Link>
@@ -101,7 +121,10 @@ export default function LoginPage() {
                             )}
 
                             <div className="space-y-2">
-                                <label htmlFor="email" className="block text-sm font-black text-zinc-900">
+                                <label
+                                    htmlFor="email"
+                                    className="block text-sm font-black text-zinc-900"
+                                >
                                     Email Address
                                 </label>
                                 <div className="relative group">
@@ -123,16 +146,24 @@ export default function LoginPage() {
 
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <label htmlFor="password" className="block text-sm font-black text-zinc-900">
+                                    <label
+                                        htmlFor="password"
+                                        className="block text-sm font-black text-zinc-900"
+                                    >
                                         Password
                                     </label>
-                                    <Link href="#" className="text-xs font-black text-emerald-500 hover:text-emerald-600 transition-colors">
+                                    <Link
+                                        href="#"
+                                        className="text-xs font-black text-emerald-500 hover:text-emerald-600 transition-colors"
+                                    >
                                         Forgot Password?
                                     </Link>
                                 </div>
                                 <div className="relative group">
                                     <input
-                                        type={showPassword ? "text" : "password"}
+                                        type={
+                                            showPassword ? "text" : "password"
+                                        }
                                         id="password"
                                         name="password"
                                         value={formData.password}
@@ -143,10 +174,16 @@ export default function LoginPage() {
                                     />
                                     <button
                                         type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
+                                        onClick={() =>
+                                            setShowPassword(!showPassword)
+                                        }
                                         className="absolute right-5 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-emerald-500 transition-colors"
                                     >
-                                        {showPassword ? <EyeOff size={22} /> : <Eye size={22} />}
+                                        {showPassword ? (
+                                            <EyeOff size={22} />
+                                        ) : (
+                                            <Eye size={22} />
+                                        )}
                                     </button>
                                 </div>
                             </div>
@@ -162,20 +199,31 @@ export default function LoginPage() {
                                         className="w-5 h-5 rounded-lg border-2 border-zinc-200 appearance-none checked:bg-emerald-500 checked:border-emerald-500 cursor-pointer transition-all"
                                     />
                                     <div className="absolute pointer-events-none opacity-0 checked:opacity-100 left-[3px] text-white">
-                                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg
+                                            className="w-3.5 h-3.5"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
                                             <polyline points="20 6 9 17 4 12" />
                                         </svg>
                                     </div>
                                 </div>
-                                <label htmlFor="keepMeLoggedIn" className="text-sm font-bold text-zinc-500 cursor-pointer select-none">
+                                <label
+                                    htmlFor="keepMeLoggedIn"
+                                    className="text-sm font-bold text-zinc-500 cursor-pointer select-none"
+                                >
                                     Keep me logged in
                                 </label>
                                 {/* CSS hack for checked state icon visibility - since tailwind 'checked:' modifier on parent is needed for absolute child */}
                                 <style jsx>{`
-                  input:checked + div {
-                    opacity: 1;
-                  }
-                `}</style>
+                                    input:checked + div {
+                                        opacity: 1;
+                                    }
+                                `}</style>
                             </div>
 
                             <button
@@ -196,7 +244,10 @@ export default function LoginPage() {
                             <div className="text-center pt-2">
                                 <p className="text-sm font-bold text-zinc-500">
                                     Don't have an account?{" "}
-                                    <Link href="#" className="text-zinc-900 hover:text-emerald-500 transition-colors">
+                                    <Link
+                                        href="#"
+                                        className="text-zinc-900 hover:text-emerald-500 transition-colors"
+                                    >
                                         Sign Up
                                     </Link>
                                 </p>
@@ -207,16 +258,24 @@ export default function LoginPage() {
                     <div className="mt-12">
                         <div className="flex items-center gap-4 mb-8">
                             <div className="h-px bg-zinc-200 flex-1"></div>
-                            <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400">Or Join As</span>
+                            <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400">
+                                Or Join As
+                            </span>
                             <div className="h-px bg-zinc-200 flex-1"></div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <Link href="/customerOnboarding" className="h-14 bg-white border border-zinc-100 rounded-2xl flex items-center justify-center gap-3 hover:bg-zinc-50 transition-all font-black text-zinc-900 shadow-sm">
+                            <Link
+                                href="/customerOnboarding"
+                                className="h-14 bg-white border border-zinc-100 rounded-2xl flex items-center justify-center gap-3 hover:bg-zinc-50 transition-all font-black text-zinc-900 shadow-sm"
+                            >
                                 <User size={18} />
                                 <span>Customer</span>
                             </Link>
-                            <Link href="/providerOnboarding" className="h-14 bg-white border border-zinc-100 rounded-2xl flex items-center justify-center gap-3 hover:bg-zinc-50 transition-all font-black text-zinc-900 shadow-sm">
+                            <Link
+                                href="/providerOnboarding"
+                                className="h-14 bg-white border border-zinc-100 rounded-2xl flex items-center justify-center gap-3 hover:bg-zinc-50 transition-all font-black text-zinc-900 shadow-sm"
+                            >
                                 <Briefcase size={18} />
                                 <span>Provider</span>
                             </Link>
@@ -238,17 +297,43 @@ export default function LoginPage() {
                     </div>
 
                     <div className="flex flex-wrap justify-center gap-8">
-                        <Link href="#" className="text-xs font-bold text-zinc-400 hover:text-emerald-500 uppercase tracking-widest transition-colors">Privacy Policy</Link>
-                        <Link href="#" className="text-xs font-bold text-zinc-400 hover:text-emerald-500 uppercase tracking-widest transition-colors">Terms of Service</Link>
-                        <Link href="#" className="text-xs font-bold text-zinc-400 hover:text-emerald-500 uppercase tracking-widest transition-colors">Support</Link>
-                        <Link href="#" className="text-xs font-bold text-zinc-400 hover:text-emerald-500 uppercase tracking-widest transition-colors">Status</Link>
+                        <Link
+                            href="#"
+                            className="text-xs font-bold text-zinc-400 hover:text-emerald-500 uppercase tracking-widest transition-colors"
+                        >
+                            Privacy Policy
+                        </Link>
+                        <Link
+                            href="#"
+                            className="text-xs font-bold text-zinc-400 hover:text-emerald-500 uppercase tracking-widest transition-colors"
+                        >
+                            Terms of Service
+                        </Link>
+                        <Link
+                            href="#"
+                            className="text-xs font-bold text-zinc-400 hover:text-emerald-500 uppercase tracking-widest transition-colors"
+                        >
+                            Support
+                        </Link>
+                        <Link
+                            href="#"
+                            className="text-xs font-bold text-zinc-400 hover:text-emerald-500 uppercase tracking-widest transition-colors"
+                        >
+                            Status
+                        </Link>
                     </div>
 
                     <div className="flex gap-4">
-                        <Link href="#" className="w-10 h-10 bg-zinc-50 rounded-full flex items-center justify-center text-zinc-400 hover:bg-emerald-50 hover:text-emerald-500 transition-all">
+                        <Link
+                            href="#"
+                            className="w-10 h-10 bg-zinc-50 rounded-full flex items-center justify-center text-zinc-400 hover:bg-emerald-50 hover:text-emerald-500 transition-all"
+                        >
                             <span className="text-lg">𝕏</span>
                         </Link>
-                        <Link href="#" className="w-10 h-10 bg-zinc-50 rounded-full flex items-center justify-center text-zinc-400 hover:bg-emerald-50 hover:text-emerald-500 transition-all">
+                        <Link
+                            href="#"
+                            className="w-10 h-10 bg-zinc-50 rounded-full flex items-center justify-center text-zinc-400 hover:bg-emerald-50 hover:text-emerald-500 transition-all"
+                        >
                             <span className="text-lg">in</span>
                         </Link>
                     </div>

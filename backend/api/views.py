@@ -377,11 +377,14 @@ def login(request):
             status=status.HTTP_403_FORBIDDEN
         )
 
+    token, _ = Token.objects.get_or_create(user=user)
+    
     return Response(
         {
             "message": "Login successful.",
             "role": role,
             "uuid": uuid,
+            "token": token.key,
             "email": email,
             "name": user.first_name or user.username,
         },
