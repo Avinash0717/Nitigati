@@ -17,6 +17,7 @@ import {
     X
 } from "lucide-react";
 import Link from "next/link";
+import { useSessionManager } from "@/components/Auth/SessionManager";
 
 interface ServiceFormPayload {
     service_title: string;
@@ -31,6 +32,7 @@ interface ServiceFormPayload {
 
 export default function NewServiceFormPage() {
     const router = useRouter();
+    const sessionManager = useSessionManager();
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -86,7 +88,8 @@ export default function NewServiceFormPage() {
         const submissionData = new FormData();
         submissionData.append("service_title", formData.service_title);
         submissionData.append("service_description", formData.service_description);
-        submissionData.append("tags", formData.tags);
+        const tagsArray = formData.tags ? formData.tags.split(',').map(tag => tag.trim()) : [];
+        submissionData.append("tags", JSON.stringify(tagsArray));
         submissionData.append("service_type", formData.service_type);
         submissionData.append("price_min", formData.price_min.toString());
         submissionData.append("price_max", formData.price_max.toString());
@@ -100,9 +103,21 @@ export default function NewServiceFormPage() {
         });
 
         try {
+            const token = sessionManager.getToken();
+            
+            if (!token) {
+                console.error("No auth token found");
+                setError("You must be logged in to create a service.");
+                setLoading(false);
+                return;
+            }
+
             const response = await fetch("/api/newServiceForm", {
                 method: "POST",
                 body: submissionData,
+                headers: {
+                    "Authorization": `Token ${token}`,
+                },
             });
 
             if (!response.ok) {

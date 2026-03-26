@@ -63,7 +63,7 @@ export default function LoginPage() {
             const data: LoginResponse = await response.json();
             if (response.ok && data.token) {
                 sessionManager.setToken(data.token);
-                router.push("/customerDashboard");
+                router.push("/providerDashboard");
             } else if (response.ok) {
                 setError("Login succeeded but no session token was returned.");
             } else {

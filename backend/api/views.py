@@ -5,7 +5,8 @@ from rest_framework import status
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
-from .models import Provider, Customer
+from .models import Provider, Customer, Tag, Service, ServiceMedia, ServiceCredential
+import json
 from .serializers import (
     ProviderCreateSerializer, ProviderImageUploadSerializer, 
     CustomerSerializer, ProviderAIOnboardingSerializer,
@@ -392,39 +393,90 @@ def login(request):
     )
 
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def service_create(request):
     """
     POST /api/services/create/ (Multipart)
     1. Validates fields via Serializer.
-    2. Handles multiple image/cert uploads.
-    3. Returns success with a mock/real service UUID.
+    2. Extracts data: title, description, service_type, price_min, price_max, tags.
+    3. Get provider from current authenticated user.
+    4. Creates Service, Tags, Media and Credentials record in DB.
+    5. Returns success with real service UUID.
     """
     serializer = ServiceCreateSerializer(data=request.data)
     if serializer.is_valid():
-        # In a real app with a model, we would do:
-        # service = Service.objects.create(**serializer.validated_data)
-        # Handle files...
-        
-        # Since we assume the model exists but can't touch it:
-        service_id = str(uuid.uuid4())
-        
-        # Log received files for verification
-        images = request.FILES.getlist('service_images')
-        certs = request.FILES.getlist('certifications')
+        try:
+            # 1. Get Data
+            title = serializer.validated_data['service_title']
+            description = serializer.validated_data['service_description']
+            service_type = serializer.validated_data['service_type']
+            price_min = serializer.validated_data['price_min']
+            price_max = serializer.validated_data['price_max']
+            
+            # tags arrive as a JSON string from the frontend
+            tags_json = serializer.validated_data.get('tags', '[]')
+            try:
+                tags_list = json.loads(tags_json) if isinstance(tags_json, str) else tags_json
+            except (json.JSONDecodeError, TypeError):
+                tags_list = []
 
-        print("[SERVICE VALIDATED DATA] ", serializer.validated_data)
-        
-        print(f"[SERVICE CREATE] Title: {serializer.validated_data['service_title']}")
-        print(f"[SERVICE CREATE] Images received: {len(images)}")
-        print(f"[SERVICE CREATE] Certifications received: {len(certs)}")
+            # 2. Get Provider
+            # Check if user has a provider_profile
+            if not hasattr(request.user, 'provider_profile'):
+                return Response(
+                    {"detail": "User is not a registered provider."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            provider = request.user.provider_profile
 
-        return Response(
-            {
-                "message": "Service created successfully",
-                "service_id": service_id
-            },
-            status=status.HTTP_201_CREATED
-        )
+            # 3. Create Service
+            service = Service.objects.create(
+                provider=provider,
+                title=title,
+                description=description,
+                service_type=service_type,
+                price_min=price_min,
+                price_max=price_max
+            )
+
+            # 4. Handle Tags
+            for tag_name in tags_list:
+                tag_obj, _ = Tag.objects.get_or_create(name=tag_name.lower())
+                service.tags.add(tag_obj)
+
+            # 5. Handle Service Media (Images)
+            images = request.FILES.getlist('service_images')
+            for image in images:
+                ServiceMedia.objects.create(
+                    service=service,
+                    image=image
+                )
+
+            # 6. Handle Service Credentials (Certs)
+            certs = request.FILES.getlist('certifications')
+            for cert in certs:
+                ServiceCredential.objects.create(
+                    service=service,
+                    file=cert,
+                    name=cert.name
+                )
+
+            return Response(
+                {
+                    "message": "Service created successfully",
+                    "service_id": str(service.uuid)
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            # Cleanup optionally or just error out
+            return Response(
+                {"detail": f"Failed to create service: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
