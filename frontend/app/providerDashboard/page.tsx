@@ -110,10 +110,19 @@ export default function ProviderDashboardPage() {
     }, []);
 
     const fetchServices = async () => {
+        const token = sessionManager.getToken();
+        if (!token) return;
+
         setServicesLoading(true);
         try {
             const response = await fetch(
                 "/api/providers/providerDashboard/services",
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Token ${token}`,
+                    },
+                },
             );
             if (!response.ok) throw new Error("Failed to fetch services");
             const result = await response.json();
@@ -128,10 +137,19 @@ export default function ProviderDashboardPage() {
     };
 
     const fetchServiceDetail = async (id: string) => {
+        const token = sessionManager.getToken();
+        if (!token) return;
+
         setServicesLoading(true);
         try {
             const response = await fetch(
                 `/api/providers/providerDashboard/services?id=${id}`,
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Token ${token}`,
+                    },
+                },
             );
             if (!response.ok)
                 throw new Error("Failed to fetch service details");

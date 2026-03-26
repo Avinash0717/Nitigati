@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 const BASE_URL = "http://127.0.0.1:8000/api/services/";
 
 export async function GET(request: Request) {
+    const token = request.headers.get("authorization");
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-
     const targetUrl = id ? `${BASE_URL}${id}/` : BASE_URL;
 
     try {
@@ -13,6 +13,7 @@ export async function GET(request: Request) {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
+                "Authorization": token || "",
             },
         });
 

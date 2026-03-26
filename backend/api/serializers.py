@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Provider, Customer
+from .models import Provider, Customer, Service
 import json
 import uuid
 import json
@@ -209,14 +209,36 @@ class ServiceCreateSerializer(serializers.Serializer):
         return data
 
 
-class ServiceReadSerializer(serializers.Serializer):
+class ServiceReadSerializer(serializers.ModelSerializer):
     """Handles data for service display."""
-    id = serializers.UUIDField()
-    title = serializers.CharField()
-    description = serializers.CharField()
-    tags = serializers.JSONField()  # Assuming tags are stored/returned as a list
-    images = serializers.JSONField()  # List of image URLs
-    verification_status = serializers.CharField()
-    price_range = serializers.CharField()
-    created_at = serializers.DateTimeField()
-    provider_id = serializers.UUIDField()
+    tags = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
+    price_range = serializers.SerializerMethodField()
+    provider_id = serializers.UUIDField(source='provider.uuid')
+
+    class Meta:
+        model = Service
+        fields = [
+            'uuid',
+            'title',
+            'description',
+            'tags',
+            'images',
+            'verification_status',
+            'price_range',
+            'created_at',
+            'provider_id'
+        ]
+
+    def get_tags(self, obj):
+        return [tag.name for tag in obj.tags.all()]
+
+    def get_images(self, obj):
+        request = self.context.get('request')
+        return [
+            request.build_absolute_uri(media.image.url)
+            for media in obj.media.all()
+        ] if request else []
+
+    def get_price_range(self, obj):
+        return f"₹{obj.price_min} - ₹{obj.price_max}"

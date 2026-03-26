@@ -481,40 +481,30 @@ def service_create(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def provider_services_list(request):
     """
     GET /api/services/
     Returns all services for the current provider.
     """
-    # Assuming we can filter by provider (mocking for now with sample data)
-    services = [
-        {
-            "id": "11111111-1111-1111-1111-111111111111",
-            "title": "Professional Woodworking",
-            "tags": ["HOME REPAIR", "WOODWORK"],
-            "image": "https://images.unsplash.com/photo-1581141849291-1125c7b692b5?w=400&h=300&fit=crop",
-            "verification_status": "Verified",
-            "price_range": "₹500 - ₹2,000"
-        },
-        {
-            "id": "22222222-2222-2222-2222-222222222222",
-            "title": "Expert Electrical Service",
-            "tags": ["ELECTRICAL", "INSTALLATION"],
-            "image": "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&h=300&fit=crop",
-            "verification_status": "Verified",
-            "price_range": "₹800 - ₹5,000"
-        },
-        {
-            "id": "33333333-3333-3333-3333-333333333333",
-            "title": "Deep Home Cleaning",
-            "tags": ["SANITATION", "HOUSEKEEPING"],
-            "image": "https://images.unsplash.com/photo-1581578731548-c64695ce6958?w=400&h=300&fit=crop",
-            "verification_status": "Verified",
-            "price_range": "₹1,200 - ₹4,500"
-        }
-    ]
+    try:
+        provider = request.user.provider_profile
+    except Provider.DoesNotExist:
+        return Response(
+            {"detail": "User is not a registered provider."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    services = Service.objects.filter(provider=provider).prefetch_related('tags', 'media')
     
-    return Response(services, status=status.HTTP_200_OK)
+    serializer = ServiceReadSerializer(
+        services,
+        many=True,
+        context={'request': request}
+    )
+    
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 def service_detail(request, uuid):
