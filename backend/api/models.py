@@ -104,7 +104,7 @@ class Service(models.Model):
 class ServiceMedia(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     service = models.ForeignKey(Service, related_name='media', on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='services/media/')
+    image = models.ImageField(upload_to='media/services/media/')
 
     def __str__(self):
         return f"{self.service.title} - Media"
@@ -112,7 +112,7 @@ class ServiceMedia(models.Model):
 class ServiceCredential(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     service = models.ForeignKey(Service, related_name='credentials', on_delete=models.CASCADE)
-    file = models.FileField(upload_to='services/credentials/')
+    file = models.FileField(upload_to='media/services/credentials/')
     name = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):

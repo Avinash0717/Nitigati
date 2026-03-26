@@ -126,6 +126,7 @@ export default function ProviderDashboardPage() {
             );
             if (!response.ok) throw new Error("Failed to fetch services");
             const result = await response.json();
+            console.log(result);
             setServices(result);
             setActiveView("services");
         } catch (err) {
@@ -154,6 +155,7 @@ export default function ProviderDashboardPage() {
             if (!response.ok)
                 throw new Error("Failed to fetch service details");
             const result = await response.json();
+
             setSelectedService(result);
             setActiveView("service_detail");
         } catch (err) {
