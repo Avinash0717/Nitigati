@@ -6,18 +6,32 @@ export async function POST(request: Request) {
     try {
         const formData = await request.formData();
 
-        const response = await fetch(BACKEND_URL, {
-            method: "POST",
-            body: formData,
-            // Boundary is automatically set by fetch for FormData
-        });
+        const response = await fetch(
+            BACKEND_URL,
+            // set auth headers as passed from client,
+
+            {
+                headers: {
+                    Authorization: request.headers.get("Authorization") || "",
+                },
+                method: "POST",
+                body: formData,
+                // Boundary is automatically set by fetch for FormData
+            },
+        );
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error(`Backend error (${response.status}):`, errorText.slice(0, 200));
+            console.error(
+                `Backend error (${response.status}):`,
+                errorText.slice(0, 200),
+            );
             return NextResponse.json(
-                { error: `Backend returned ${response.status}`, details: errorText.slice(0, 500) },
-                { status: response.status }
+                {
+                    error: `Backend returned ${response.status}`,
+                    details: errorText.slice(0, 500),
+                },
+                { status: response.status },
             );
         }
 
@@ -27,7 +41,7 @@ export async function POST(request: Request) {
         console.error("Proxy error:", error.message || error);
         return NextResponse.json(
             { error: `Proxy failure: ${error.message || "Unknown error"}` },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }
