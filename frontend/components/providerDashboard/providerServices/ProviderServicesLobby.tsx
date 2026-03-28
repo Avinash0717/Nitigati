@@ -2,6 +2,7 @@
 
 import { CheckCircle, MoreVertical, Edit2, BarChart2 } from "lucide-react";
 import { ServiceSummary } from "@/app/providerDashboard/page";
+import Link from "next/link";
 
 interface ProviderServicesLobbyProps {
     services: ServiceSummary[];
@@ -38,9 +39,9 @@ export default function ProviderServicesLobby({
                     You haven't created any services yet. Start by adding your
                     first professional service.
                 </p>
-                <button className="bg-emerald-500 text-white px-10 py-4 rounded-2xl font-black text-sm transition-all shadow-lg shadow-emerald-500/20 active:scale-95">
+                <Link href="/newServiceForm" className="bg-emerald-500 text-white px-10 py-4 rounded-2xl font-black text-sm transition-all shadow-lg shadow-emerald-500/20 active:scale-95">
                     Create Service
-                </button>
+                </Link>
             </div>
         );
     }

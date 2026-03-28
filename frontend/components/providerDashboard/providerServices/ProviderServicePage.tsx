@@ -63,7 +63,7 @@ export default function ProviderServicePage({ service, onBack }: ProviderService
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <MapPin size={14} />
-                                            <span>Mumbai, India</span>
+                                            <span>{service.location}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -86,7 +86,13 @@ export default function ProviderServicePage({ service, onBack }: ProviderService
                             <div className="w-px h-8 bg-zinc-100"></div>
                             <div className="flex-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Published</span>
-                                <span className="text-sm font-bold text-zinc-900">Jan 12, 2024</span>
+                                <span className="text-sm font-bold text-zinc-900">
+                                    {new Date(service.created_at).toLocaleDateString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        year: 'numeric' 
+                                    })}
+                                </span>
                             </div>
                             <div className="w-px h-8 bg-zinc-100"></div>
                             <div className="flex-1">
@@ -169,8 +175,7 @@ export default function ProviderServicePage({ service, onBack }: ProviderService
                     <div className="bg-white rounded-[3rem] p-10 border border-zinc-100 shadow-xl shadow-zinc-200/50 sticky top-32">
                         <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block mb-2">Pricing Starts From</span>
                         <div className="flex items-baseline gap-2 mb-10">
-                            <h4 className="text-4xl font-black text-zinc-900 tracking-tight">₹599</h4>
-                            <span className="text-zinc-400 font-bold text-sm">/ service</span>
+                            <h4 className="text-2xl font-black text-zinc-900 tracking-tight">{service.price_range.split(" - ")[0]}</h4>
                         </div>
 
                         <div className="space-y-4">

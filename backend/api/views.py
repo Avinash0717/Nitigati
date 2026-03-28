@@ -507,26 +507,26 @@ def provider_services_list(request):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def service_detail(request, uuid):
     """
     GET /api/services/<uuid>/
-    Returns full details for a single service.
+    Returns full details for a single service belonging to the authenticated provider.
     """
-    # Mocking single service detail
-    detail = {
-        "id": str(uuid),
-        "title": "Professional Woodworking",
-        "description": "I provide high-quality woodworking services for home maintenance and custom furniture repair. With over 8 years of experience, I ensure precision and durability in every project. My approach combines traditional craftsmanship with modern techniques to deliver exceptional results.",
-        "tags": ["HOME REPAIR", "WOODWORK", "RENOVATION"],
-        "images": [
-            "https://images.unsplash.com/photo-1581141849291-1125c7b692b5?w=800&h=600&fit=crop",
-            "https://images.unsplash.com/photo-1552330614-3709dec866a1?w=800&h=600&fit=crop",
-            "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=800&h=600&fit=crop"
-        ],
-        "verification_status": "Verified",
-        "price_range": "₹500 - ₹2,000",
-        "provider_id": "99999999-9999-9999-9999-999999999999",
-        "created_at": "2024-01-01T00:00:00Z"
-    }
+    try:
+        provider = request.user.provider_profile
+    except Provider.DoesNotExist:
+        return Response(
+            {"detail": "User is not a registered provider."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    service = get_object_or_404(
+        Service.objects.select_related('provider').prefetch_related('tags', 'media', 'credentials'),
+        uuid=uuid,
+        provider=provider
+    )
     
-    return Response(detail, status=status.HTTP_200_OK)
+    serializer = ServiceReadSerializer(service, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)

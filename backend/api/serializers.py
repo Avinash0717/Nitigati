@@ -211,23 +211,29 @@ class ServiceCreateSerializer(serializers.Serializer):
 
 class ServiceReadSerializer(serializers.ModelSerializer):
     """Handles data for service display."""
+    id = serializers.UUIDField(source='uuid', read_only=True)
     tags = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    credentials = serializers.SerializerMethodField()
     price_range = serializers.SerializerMethodField()
     provider_id = serializers.UUIDField(source='provider.uuid')
+    location = serializers.CharField(source='provider.location', read_only=True)
 
     class Meta:
         model = Service
         fields = [
+            'id',
             'uuid',
             'title',
             'description',
             'tags',
             'images',
+            'credentials',
             'verification_status',
             'price_range',
             'created_at',
-            'provider_id'
+            'provider_id',
+            'location'
         ]
 
     def get_tags(self, obj):
@@ -238,6 +244,16 @@ class ServiceReadSerializer(serializers.ModelSerializer):
         return [
             request.build_absolute_uri(media.image.url)
             for media in obj.media.all()
+        ] if request else []
+
+    def get_credentials(self, obj):
+        request = self.context.get('request')
+        return [
+            {
+                "name": cert.name,
+                "url": request.build_absolute_uri(cert.file.url)
+            }
+            for cert in obj.credentials.all()
         ] if request else []
 
     def get_price_range(self, obj):

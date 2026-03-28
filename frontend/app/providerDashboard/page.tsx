@@ -52,20 +52,23 @@ export interface ServiceSummary {
     id: string;
     title: string;
     tags: string[];
-    image: string;
+    images: string[];
     verification_status: string;
     price_range: string;
 }
 
 export interface ServiceDetail {
     id: string;
+    uuid: string;
     title: string;
     description: string;
     tags: string[];
     images: string[];
+    credentials?: { name: string, url: string }[];
     verification_status: string;
     price_range: string;
     provider_id: string;
+    location?: string;
     created_at: string;
 }
 
@@ -74,7 +77,7 @@ type ViewType =
     | "messages"
     | "services"
     | "orders"
-    | "service_detail";
+    | "service detail";
 
 export default function ProviderDashboardPage() {
     const [activeView, setActiveView] = useState<ViewType>("dashboard");
@@ -110,6 +113,7 @@ export default function ProviderDashboardPage() {
     }, []);
 
     const fetchServices = async () => {
+        setActiveView("services");
         const token = sessionManager.getToken();
         if (!token) return;
 
@@ -127,7 +131,17 @@ export default function ProviderDashboardPage() {
             if (!response.ok) throw new Error("Failed to fetch services");
             const result = await response.json();
             console.log(result);
-            setServices(result);
+            const mappedServices = result.map((s: any) => ({
+                id: s.uuid,
+                title: s.title,
+                tags: s.tags,
+                images: s.images || [],
+                verification_status: s.verification_status,
+                price_range: s.price_range,
+            }));
+
+            setServices(mappedServices);
+
             setActiveView("services");
         } catch (err) {
             console.error("Error fetching services:", err);
@@ -156,8 +170,24 @@ export default function ProviderDashboardPage() {
                 throw new Error("Failed to fetch service details");
             const result = await response.json();
 
-            setSelectedService(result);
-            setActiveView("service_detail");
+            // Mapping backend response to ServiceDetail interface
+            const mappedService: ServiceDetail = {
+                id: result.id || result.uuid,
+                uuid: result.uuid,
+                title: result.title,
+                description: result.description,
+                tags: result.tags,
+                images: result.images || [],
+                credentials: result.credentials || [],
+                verification_status: result.verification_status,
+                price_range: result.price_range,
+                provider_id: result.provider_id,
+                location: result.location || "Location not specified",
+                created_at: result.created_at
+            };
+
+            setSelectedService(mappedService);
+            setActiveView("service detail");
         } catch (err) {
             console.error("Error fetching service detail:", err);
             setError("Failed to load service details.");
@@ -205,7 +235,7 @@ export default function ProviderDashboardPage() {
                         loading={servicesLoading}
                     />
                 );
-            case "service_detail":
+            case "service detail":
                 return selectedService ? (
                     <ProviderServicePage
                         service={selectedService}
@@ -259,13 +289,12 @@ export default function ProviderDashboardPage() {
                                     setActiveView(item.id as ViewType);
                                 }
                             }}
-                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${
-                                activeView === item.id ||
+                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${activeView === item.id ||
                                 (item.id === "services" &&
-                                    activeView === "service_detail")
-                                    ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
-                                    : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
-                            }`}
+                                    activeView === "service detail")
+                                ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
+                                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
+                                }`}
                         >
                             <item.icon
                                 size={22}
@@ -365,7 +394,7 @@ export default function ProviderDashboardPage() {
                             <span>{activeView}</span>
                         </div>
                         <h2 className="text-4xl font-black text-zinc-900 tracking-tight capitalize">
-                            {activeView} Overview
+                            {activeView}
                         </h2>
                     </div>
 
