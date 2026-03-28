@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
     LayoutDashboard,
     MessageSquare,
@@ -14,6 +15,7 @@ import {
     LogOut,
     ChevronRight,
     User,
+    ArrowLeftRight,
 } from "lucide-react";
 
 // Components
@@ -80,6 +82,7 @@ type ViewType =
     | "service detail";
 
 export default function ProviderDashboardPage() {
+    const router = useRouter();
     const [activeView, setActiveView] = useState<ViewType>("dashboard");
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -310,6 +313,46 @@ export default function ProviderDashboardPage() {
                         </button>
                     ))}
                 </nav>
+
+                <div className="mt-8 space-y-2">
+                    <button
+                        onClick={async () => {
+                            const token = sessionManager.getToken();
+                            if (!token) {
+                                router.push("/login");
+                                return;
+                            }
+                            try {
+                                const res = await fetch("/api/switch-role", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "Authorization": `Token ${token}`,
+                                    },
+                                    body: JSON.stringify({ role: "customer" }),
+                                });
+                                if (res.ok) {
+                                    router.push("/customerDashboard");
+                                } else {
+                                    console.error("Failed to switch role");
+                                    // Fallback redirect anyway if backend fails but we want to allow movement? 
+                                    // Actually, better to just push if we are sure.
+                                    router.push("/customerDashboard");
+                                }
+                            } catch (err) {
+                                console.error("Switch error:", err);
+                                router.push("/customerDashboard");
+                            }
+                        }}
+                        className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-emerald-600 bg-emerald-50/50 hover:bg-emerald-50 font-bold transition-all group"
+                    >
+                        <ArrowLeftRight
+                            size={22}
+                            className="text-emerald-500 group-hover:rotate-12 transition-transform"
+                        />
+                        <span className="text-sm">Switch to Customer</span>
+                    </button>
+                </div>
 
                 <div className="pt-8 mt-8 border-t border-zinc-50 space-y-2">
                     <button className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold transition-all group">

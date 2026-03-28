@@ -1,5 +1,5 @@
 from django.contrib import admin
-from api.models import Provider, Customer, Tag, Service, ServiceMedia, ServiceCredential
+from api.models import Provider, Customer, Tag, Service, ServiceMedia, ServiceCredential, UserPreference
 # Register your models here.
 
 admin.site.register(Provider)
@@ -8,3 +8,4 @@ admin.site.register(Tag)
 admin.site.register(Service)
 admin.site.register(ServiceMedia)
 admin.site.register(ServiceCredential)
+admin.site.register(UserPreference)

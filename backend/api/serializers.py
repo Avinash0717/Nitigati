@@ -36,6 +36,8 @@ class ProviderCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         name = validated_data.get('name', '')
         password = validated_data.pop('password')
+        email = validated_data.get('email', '')
+        phone_number = validated_data.get('phone_number', '')
 
         # Create Provider first to get its UUID
         provider = Provider.objects.create(**validated_data)
@@ -43,7 +45,7 @@ class ProviderCreateSerializer(serializers.ModelSerializer):
         # Create the Django User with UUID as username
         user = User.objects.create_user(
             username=str(provider.uuid),
-            email=validated_data.get('email', ''),
+            email=email,
             password=password,
             first_name=name,
         )
@@ -51,6 +53,16 @@ class ProviderCreateSerializer(serializers.ModelSerializer):
         # Link User to Provider
         provider.user = user
         provider.save(update_fields=['user'])
+
+        # Automatically create Customer profile if it doesn't exist
+        if not Customer.objects.filter(user=user).exists():
+            Customer.objects.create(
+                user=user,
+                name=name,
+                email=email,
+                phone_number=phone_number
+            )
+
         return provider
 
 
@@ -145,6 +157,18 @@ class ProviderAIOnboardingSerializer(serializers.Serializer):
         provider.user = user
         provider.save(update_fields=['user'])
         print(f"[SERIALIZER] Provider.user linked and saved")
+
+        # Automatically create Customer profile if it doesn't exist
+        if not Customer.objects.filter(user=user).exists():
+            print(f"[SERIALIZER] Creating corresponding Customer profile...")
+            Customer.objects.create(
+                user=user,
+                name=name,
+                email=email,
+                phone_number=phone_number
+            )
+            print(f"[SERIALIZER] Customer profile created")
+
         return provider
 
 
@@ -217,6 +241,8 @@ class ServiceReadSerializer(serializers.ModelSerializer):
     credentials = serializers.SerializerMethodField()
     price_range = serializers.SerializerMethodField()
     provider_id = serializers.UUIDField(source='provider.uuid')
+    provider_name = serializers.CharField(source='provider.name', read_only=True)
+    provider_image = serializers.SerializerMethodField()
     location = serializers.CharField(source='provider.location', read_only=True)
 
     class Meta:
@@ -233,6 +259,8 @@ class ServiceReadSerializer(serializers.ModelSerializer):
             'price_range',
             'created_at',
             'provider_id',
+            'provider_name',
+            'provider_image',
             'location'
         ]
 
@@ -255,6 +283,12 @@ class ServiceReadSerializer(serializers.ModelSerializer):
             }
             for cert in obj.credentials.all()
         ] if request else []
+
+    def get_provider_image(self, obj):
+        request = self.context.get('request')
+        if not obj.provider.profile_picture:
+            return None
+        return request.build_absolute_uri(obj.provider.profile_picture.url) if request else None
 
     def get_price_range(self, obj):
         return f"₹{obj.price_min} - ₹{obj.price_max}"
@@ -306,3 +340,9 @@ class CustomerMessageSerializer(serializers.Serializer):
     last_message = serializers.CharField()
     time = serializers.CharField()
     unread_count = serializers.IntegerField(default=0)
+
+class DiscoverServicesSerializer(serializers.Serializer):
+    """Serializer for grouped discovery services."""
+    featured = ServiceReadSerializer(many=True)
+    trending = ServiceReadSerializer(many=True)
+    recommended = ServiceReadSerializer(many=True)

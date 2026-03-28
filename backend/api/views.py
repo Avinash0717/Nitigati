@@ -4,15 +4,15 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from django.contrib.auth import authenticate
-from .models import Provider, Customer, Tag, Service, ServiceMedia, ServiceCredential
+from .models import Provider, Customer, Tag, Service, ServiceMedia, ServiceCredential, UserPreference
 import json
 from .serializers import (
     ProviderCreateSerializer, ProviderImageUploadSerializer, 
     CustomerSerializer, ProviderAIOnboardingSerializer,
     ServiceCreateSerializer, ServiceReadSerializer,
     CustomerDashboardSerializer, CustomerOrderSerializer,
-    CustomerTransactionSerializer, CustomerMessageSerializer
+    CustomerTransactionSerializer, CustomerMessageSerializer,
+    DiscoverServicesSerializer
 )
 from rest_framework.authtoken.models import Token # type: ignore
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication # type: ignore
@@ -86,34 +86,6 @@ def provider_upload_images(request):
             
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['POST'])
-def login(request):
-    """
-    POST /api/login/
-    Body: { "email": "...", "password": "..." }
-    Authenticates against Django User model (unified for Provider and Customer).
-    Returns 200 with user role and uuid on success.
-    """
-    email = request.data.get('email', '').strip()
-    password = request.data.get('password', '')
-
-    if not email or not password:
-        return Response(
-            {"detail": "Email and password are required."},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    user = get_object_or_404(User, email=email)
-    if not user.check_password(request.data['password']):
-        return Response(
-            {"detail": "Invalid email or password."},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-    token, _ = Token.objects.get_or_create(user=user) # type: ignore ; token, created
-    return Response({
-        "token": token.key,
-        "uuid": str(user.username),
-        "role": "provider" if hasattr(user, 'provider') else "customer"
-    }, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 def logout(request):
@@ -341,7 +313,7 @@ def login(request):
     POST /api/login/
     Body: { "email": "...", "password": "..." }
     Authenticates against Django User model (unified for Provider and Customer).
-    Returns 200 with user role and uuid on success.
+    Returns 200 with user role, available_roles, and last_active_role on success.
     """
     email = request.data.get('email', '').strip()
     password = request.data.get('password', '')
@@ -352,8 +324,6 @@ def login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Django's authenticate() uses username, but we store email as username
-    
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
@@ -369,7 +339,14 @@ def login(request):
             status=status.HTTP_401_UNAUTHORIZED
         )
 
-    # Determine role
+    # Determine available roles
+    available_roles = []
+    if hasattr(user, 'customer_profile'):
+        available_roles.append('customer')
+    if hasattr(user, 'provider_profile'):
+        available_roles.append('provider')
+
+    # Determine active role and uuid
     role = None
     uuid = None
     if hasattr(user, 'provider_profile'):
@@ -384,6 +361,13 @@ def login(request):
             status=status.HTTP_403_FORBIDDEN
         )
 
+    # Dashboard Preference Tracking
+    pref, created = UserPreference.objects.get_or_create(user=user)
+    if created:
+        # Initial fallback: provider if exists, else customer
+        pref.last_active_role = 'provider' if hasattr(user, 'provider_profile') else 'customer'
+        pref.save()
+
     token, _ = Token.objects.get_or_create(user=user)
     
     return Response(
@@ -394,9 +378,50 @@ def login(request):
             "token": token.key,
             "email": email,
             "name": user.first_name or user.username,
+            "available_roles": available_roles,
+            "last_active_role": pref.last_active_role
         },
         status=status.HTTP_200_OK
     )
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def switch_role(request):
+    """
+    POST /api/switch-role/
+    Input: { "role": "customer" | "provider" }
+    Validates role availability and updates last_active_role preference.
+    """
+    role = request.data.get('role')
+    if role not in ['customer', 'provider']:
+        return Response(
+            {"detail": "Invalid role selection."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Validate availability
+    if role == 'provider' and not hasattr(request.user, 'provider_profile'):
+        return Response(
+            {"detail": "Provider profile does not exist. Please complete onboarding first."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    if role == 'customer' and not hasattr(request.user, 'customer_profile'):
+         return Response(
+            {"detail": "Customer profile does not exist."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Update preference
+    pref, _ = UserPreference.objects.get_or_create(user=request.user)
+    pref.last_active_role = role
+    pref.save()
+
+    return Response({
+        "message": f"Successfully switched to {role} role.",
+        "role": role
+    }, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication])
@@ -518,21 +543,42 @@ def provider_services_list(request):
 def service_detail(request, uuid):
     """
     GET /api/services/<uuid>/
-    Returns full details for a single service belonging to the authenticated provider.
+    Returns full details for a single service.
+    Customers can access ANY service.
+    Providers can ONLY access their own services.
     """
+    # 1. Role Detection
+    user = request.user
+    role = 'customer' # default
+    
     try:
-        provider = request.user.provider_profile
-    except Provider.DoesNotExist:
-        return Response(
-            {"detail": "User is not a registered provider."},
-            status=status.HTTP_403_FORBIDDEN
-        )
+        pref = UserPreference.objects.get(user=user)
+        role = pref.last_active_role
+    except UserPreference.DoesNotExist:
+        # Fallback: provider if profile exists, else customer
+        if hasattr(user, 'provider_profile'):
+            role = 'provider'
+        else:
+            role = 'customer'
 
-    service = get_object_or_404(
-        Service.objects.select_related('provider').prefetch_related('tags', 'media', 'credentials'),
-        uuid=uuid,
-        provider=provider
-    )
+    # 2. Access Control
+    queryset = Service.objects.select_related('provider').prefetch_related('tags', 'media', 'credentials')
+
+    if role == 'customer':
+        # Unrestricted access to any service by uuid
+        service = get_object_or_404(queryset, uuid=uuid)
+    else:
+        # Provider role
+        try:
+            provider = user.provider_profile
+        except Provider.DoesNotExist:
+            return Response(
+                {"detail": "User is not a registered provider."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Restrict to own services only
+        service = get_object_or_404(queryset, uuid=uuid, provider=provider)
     
     serializer = ServiceReadSerializer(service, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
@@ -637,7 +683,18 @@ def customer_messages_list(request):
 @permission_classes([IsAuthenticated])
 def customer_discover_services_list(request):
     """GET /api/customer/discover-services/"""
-    # Simply return all active services for discovery
-    services = Service.objects.filter(is_active=True).prefetch_related('tags', 'media')
-    serializer = ServiceReadSerializer(services, many=True, context={'request': request})
+    # Categorise services for better discovery experience
+    all_active = Service.objects.filter(is_active=True).select_related('provider').prefetch_related('tags', 'media')
+    
+    featured = all_active.filter(verification_status='verified').order_by('-created_at')[:3]
+    trending = all_active.order_by('-created_at')[:4]
+    recommended = all_active.order_by('?')[:3] # Random fallback for now
+    
+    data = {
+        "featured": featured,
+        "trending": trending,
+        "recommended": recommended
+    }
+    
+    serializer = DiscoverServicesSerializer(data, context={'request': request})
     return Response(serializer.data)

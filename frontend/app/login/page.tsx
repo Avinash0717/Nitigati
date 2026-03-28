@@ -24,6 +24,10 @@ interface LoginResponse {
     message: string;
     token?: string;
     authenticated?: boolean;
+    role?: "customer" | "provider";
+    available_roles?: ("customer" | "provider")[];
+    last_active_role?: "customer" | "provider";
+    uuid?: string;
 }
 
 export default function LoginPage() {
@@ -63,7 +67,15 @@ export default function LoginPage() {
             const data: LoginResponse = await response.json();
             if (response.ok && data.token) {
                 sessionManager.setToken(data.token);
-                router.push("/providerDashboard");
+                
+                // Dashboard Preference Redirect
+                const targetRole = data.last_active_role || data.role;
+                
+                if (targetRole === "provider") {
+                    router.push("/providerDashboard");
+                } else {
+                    router.push("/customerDashboard");
+                }
             } else if (response.ok) {
                 setError("Login succeeded but no session token was returned.");
             } else {

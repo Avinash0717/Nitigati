@@ -4,6 +4,18 @@ from uuid import uuid4
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
+class UserPreference(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='preferences')
+    last_active_role = models.CharField(max_length=20, choices=[('customer', 'Customer'), ('provider', 'Provider')], default='customer')
+
+    def __str__(self):
+        return f"{self.user.email} - {self.last_active_role}"
 
 def provider_image_path(instance, filename):
 	"""Save provider images under providers/<uuid>/<filename>."""

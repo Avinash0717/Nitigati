@@ -5,6 +5,7 @@ urlpatterns = [
     path('login', views.login),
     path('logout', views.logout),
     path('verify_token', views.test_token),
+    path('switch-role/', views.switch_role, name='switch-role'),
     path("providers/", views.provider_create, name="provider-create"),
     path("providers/upload-images/", views.provider_upload_images, name="provider-upload-images"),
     path("providers/<uuid:uuid>/", views.provider_detail, name="provider-detail"),

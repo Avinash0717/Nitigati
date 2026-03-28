@@ -14,6 +14,7 @@ import {
     Bell,
     ChevronRight,
     Compass,
+    ArrowLeftRight,
 } from "lucide-react";
 
 // Components
@@ -22,7 +23,9 @@ import CustomerOrders from "@/components/customerDashboard/customerOrders/Custom
 import CustomerTransactions from "@/components/customerDashboard/customerTransactions/CustomerTransactions";
 import CustomerMessages from "@/components/customerDashboard/customerMessages/CustomerMessages";
 import CustomerDiscoverServices from "@/components/customerDashboard/customerDiscoverServices/CustomerDiscoverServices";
+import ProviderServicePage from "@/components/providerDashboard/providerServices/ProviderServicePage";
 import { useSessionManager } from "@/components/Auth/SessionManager";
+import { ServiceDetail } from "@/app/providerDashboard/page";
 
 // --- INTERFACES ---
 
@@ -83,8 +86,16 @@ export interface DiscoverService {
     images: string[];
     price_range: string;
     provider_id: string;
+    provider_name: string;
+    provider_image?: string;
     location?: string;
     verification_status: string;
+}
+
+export interface DiscoverServicesData {
+    featured: DiscoverService[];
+    trending: DiscoverService[];
+    recommended: DiscoverService[];
 }
 
 type ViewType =
@@ -92,7 +103,8 @@ type ViewType =
     | "orders"
     | "transactions"
     | "messages"
-    | "discover services";
+    | "discover services"
+    | "service_detail";
 
 export default function CustomerDashboardPage() {
     const router = useRouter();
@@ -107,9 +119,9 @@ export default function CustomerDashboardPage() {
     const [orders, setOrders] = useState<CustomerOrder[]>([]);
     const [transactions, setTransactions] = useState<CustomerTransaction[]>([]);
     const [messages, setMessages] = useState<CustomerMessage[]>([]);
-    const [discoverServices, setDiscoverServices] = useState<DiscoverService[]>(
-        [],
-    );
+    const [discoverData, setDiscoverData] = useState<DiscoverServicesData | null>(null);
+    const [selectedService, setSelectedService] = useState<ServiceDetail | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
 
     // Redirect if not logged in
     useEffect(() => {
@@ -189,10 +201,53 @@ export default function CustomerDashboardPage() {
                         headers: { Authorization: `Token ${token}` },
                     },
                 );
-                if (res.ok) setDiscoverServices(await res.json());
+                if (res.ok) setDiscoverData(await res.json());
             }
         } catch (err) {
             console.error(`Error fetching ${view} data:`, err);
+        }
+    };
+
+    const fetchServiceDetail = async (uuid: string) => {
+        if (!sessionManager.isLoggedIn) return;
+        const token = sessionManager.getToken();
+        
+        setDetailLoading(true);
+        try {
+            const response = await fetch(
+                `/api/providers/providerDashboard/services?id=${uuid}`,
+                {
+                    headers: {
+                        Authorization: `Token ${token}`,
+                    },
+                },
+            );
+            if (!response.ok) throw new Error("Failed to fetch service details");
+            const result = await response.json();
+
+            // Mapping backend response to ServiceDetail interface
+            const mappedService: ServiceDetail = {
+                id: result.id || result.uuid,
+                uuid: result.uuid,
+                title: result.title,
+                description: result.description,
+                tags: result.tags,
+                images: result.images || [],
+                credentials: result.credentials || [],
+                verification_status: result.verification_status,
+                price_range: result.price_range,
+                provider_id: result.provider_id,
+                location: result.location || "Location not specified",
+                created_at: result.created_at
+            };
+
+            setSelectedService(mappedService);
+            setActiveView("service_detail");
+        } catch (err) {
+            console.error("Error fetching service detail:", err);
+            setError("Failed to load service details.");
+        } finally {
+            setDetailLoading(false);
         }
     };
 
@@ -205,7 +260,7 @@ export default function CustomerDashboardPage() {
     ];
 
     const renderContent = () => {
-        if (loading && activeView === "dashboard") {
+        if ((loading && activeView === "dashboard") || detailLoading) {
             return (
                 <div className="flex items-center justify-center min-h-[400px]">
                     <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
@@ -240,7 +295,14 @@ export default function CustomerDashboardPage() {
             case "messages":
                 return <CustomerMessages messages={messages} />;
             case "discover services":
-                return <CustomerDiscoverServices services={discoverServices} />;
+                return <CustomerDiscoverServices data={discoverData} onServiceClick={fetchServiceDetail} />;
+            case "service_detail":
+                return selectedService ? (
+                    <ProviderServicePage 
+                        service={selectedService} 
+                        onBack={() => setActiveView("discover services")} 
+                    />
+                ) : null;
             default:
                 return null;
         }
@@ -295,6 +357,48 @@ export default function CustomerDashboardPage() {
                         </button>
                     ))}
                 </nav>
+
+                <div className="mt-8 space-y-2">
+                    <button
+                        onClick={async () => {
+                            const token = sessionManager.getToken();
+                            if (!token) {
+                                router.push("/login");
+                                return;
+                            }
+                            try {
+                                const res = await fetch("/api/switch-role", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "Authorization": `Token ${token}`,
+                                    },
+                                    body: JSON.stringify({ role: "provider" }),
+                                });
+
+                                if (res.ok) {
+                                    router.push("/providerDashboard");
+                                } else if (res.status === 403) {
+                                    // Provider profile doesn't exist, go to onboarding
+                                    router.push("/providerOnboarding");
+                                } else {
+                                    console.error("Failed to switch role");
+                                    router.push("/providerDashboard");
+                                }
+                            } catch (err) {
+                                console.error("Switch error:", err);
+                                router.push("/providerDashboard");
+                            }
+                        }}
+                        className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-emerald-600 bg-emerald-50/50 hover:bg-emerald-50 font-bold transition-all group"
+                    >
+                        <ArrowLeftRight
+                            size={22}
+                            className="text-emerald-500 group-hover:rotate-12 transition-transform"
+                        />
+                        <span className="text-sm">Switch to Provider</span>
+                    </button>
+                </div>
 
                 <div className="pt-8 mt-8 border-t border-zinc-50 space-y-2">
                     <button className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold transition-all group">
