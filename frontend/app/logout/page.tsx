@@ -7,9 +7,9 @@ export default function ExpertsPage() {
     const sessionManager = useSessionManager();
     if (!sessionManager.isLoggedIn) {
         sessionManager.clearToken();
-        router.push("/login");
         return null;
     }
+    router.push("/login");
     return (
         <div className="min-h-screen bg-[#f7faf8]">
             {/* ================= HEADER ================= */}

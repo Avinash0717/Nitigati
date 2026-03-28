@@ -102,14 +102,18 @@ export default function CustomerDashboardPage() {
     const [error, setError] = useState<string | null>(null);
 
     // Dynamic Data State
-    const [dashboardData, setDashboardData] = useState<CustomerDashboardData | null>(null);
+    const [dashboardData, setDashboardData] =
+        useState<CustomerDashboardData | null>(null);
     const [orders, setOrders] = useState<CustomerOrder[]>([]);
     const [transactions, setTransactions] = useState<CustomerTransaction[]>([]);
     const [messages, setMessages] = useState<CustomerMessage[]>([]);
-    const [discoverServices, setDiscoverServices] = useState<DiscoverService[]>([]);
+    const [discoverServices, setDiscoverServices] = useState<DiscoverService[]>(
+        [],
+    );
 
     // Redirect if not logged in
     useEffect(() => {
+        console.log("Checking login status:", sessionManager.isLoggedIn);
         if (!sessionManager.isLoggedIn) {
             router.push("/login");
         }
@@ -123,13 +127,17 @@ export default function CustomerDashboardPage() {
             setLoading(true);
             try {
                 const token = sessionManager.getToken();
-                const response = await fetch("/api/customer/customerDashboard/dashboard", {
-                    headers: {
-                        Authorization: `Token ${token}`,
+                const response = await fetch(
+                    "/api/customer/customerDashboard/dashboard",
+                    {
+                        headers: {
+                            Authorization: `Token ${token}`,
+                        },
                     },
-                });
+                );
 
-                if (!response.ok) throw new Error("Failed to fetch dashboard data");
+                if (!response.ok)
+                    throw new Error("Failed to fetch dashboard data");
                 const result = await response.json();
                 setDashboardData(result);
             } catch (err: any) {
@@ -141,7 +149,7 @@ export default function CustomerDashboardPage() {
         }
 
         fetchInitialData();
-    }, [sessionManager]);
+    }, []);
 
     // Fetch View-Specific Data
     const handleViewChange = async (view: ViewType) => {
@@ -151,24 +159,36 @@ export default function CustomerDashboardPage() {
 
         try {
             if (view === "orders") {
-                const res = await fetch("/api/customer/customerDashboard/order", {
-                    headers: { Authorization: `Token ${token}` }
-                });
+                const res = await fetch(
+                    "/api/customer/customerDashboard/order",
+                    {
+                        headers: { Authorization: `Token ${token}` },
+                    },
+                );
                 if (res.ok) setOrders(await res.json());
             } else if (view === "transactions") {
-                const res = await fetch("/api/customer/customerDashboard/transaction", {
-                    headers: { Authorization: `Token ${token}` }
-                });
+                const res = await fetch(
+                    "/api/customer/customerDashboard/transaction",
+                    {
+                        headers: { Authorization: `Token ${token}` },
+                    },
+                );
                 if (res.ok) setTransactions(await res.json());
             } else if (view === "messages") {
-                const res = await fetch("/api/customer/customerDashboard/messages", {
-                    headers: { Authorization: `Token ${token}` }
-                });
+                const res = await fetch(
+                    "/api/customer/customerDashboard/messages",
+                    {
+                        headers: { Authorization: `Token ${token}` },
+                    },
+                );
                 if (res.ok) setMessages(await res.json());
             } else if (view === "discover services") {
-                const res = await fetch("/api/customer/customerDashboard/discoverServices", {
-                    headers: { Authorization: `Token ${token}` }
-                });
+                const res = await fetch(
+                    "/api/customer/customerDashboard/discoverServices",
+                    {
+                        headers: { Authorization: `Token ${token}` },
+                    },
+                );
                 if (res.ok) setDiscoverServices(await res.json());
             }
         } catch (err) {
@@ -198,7 +218,10 @@ export default function CustomerDashboardPage() {
                 <div className="bg-red-50 text-red-600 p-8 rounded-[2rem] border border-red-100 text-center max-w-md mx-auto mt-20">
                     <p className="font-black mb-4">Error loading data</p>
                     <p className="text-sm font-medium mb-6">{error}</p>
-                    <button onClick={() => window.location.reload()} className="bg-red-600 text-white px-6 py-2 rounded-xl text-xs font-black">
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="bg-red-600 text-white px-6 py-2 rounded-xl text-xs font-black"
+                    >
                         Try Again
                     </button>
                 </div>
@@ -207,7 +230,9 @@ export default function CustomerDashboardPage() {
 
         switch (activeView) {
             case "dashboard":
-                return dashboardData ? <Dashboard data={dashboardData} /> : null;
+                return dashboardData ? (
+                    <Dashboard data={dashboardData} />
+                ) : null;
             case "orders":
                 return <CustomerOrders orders={orders} />;
             case "transactions":
@@ -229,11 +254,17 @@ export default function CustomerDashboardPage() {
             <aside className="w-72 bg-white border-r border-zinc-100 flex flex-col p-8 fixed h-full z-20">
                 <Link href="/" className="flex items-center gap-3 group mb-16">
                     <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 shadow-lg shadow-emerald-500/20">
-                        <span className="text-white font-black text-2xl italic pt-1">N</span>
+                        <span className="text-white font-black text-2xl italic pt-1">
+                            N
+                        </span>
                     </div>
                     <div>
-                        <span className="text-2xl font-black tracking-tighter block leading-none">Nitigati</span>
-                        <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400">Customer Client</span>
+                        <span className="text-2xl font-black tracking-tighter block leading-none">
+                            Nitigati
+                        </span>
+                        <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400">
+                            Customer Client
+                        </span>
                     </div>
                 </Link>
 
@@ -241,23 +272,36 @@ export default function CustomerDashboardPage() {
                     {navItems.map((item) => (
                         <button
                             key={item.id}
-                            onClick={() => handleViewChange(item.id as ViewType)}
+                            onClick={() =>
+                                handleViewChange(item.id as ViewType)
+                            }
                             className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${
-                                activeView === item.id 
-                                ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20" 
-                                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
+                                activeView === item.id
+                                    ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
+                                    : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
                             }`}
                         >
-                            <item.icon size={22} className={`${activeView === item.id ? "text-white" : "text-zinc-400 group-hover:text-emerald-500"} transition-colors`} />
+                            <item.icon
+                                size={22}
+                                className={`${activeView === item.id ? "text-white" : "text-zinc-400 group-hover:text-emerald-500"} transition-colors`}
+                            />
                             <span className="text-sm">{item.label}</span>
-                            {activeView === item.id && <ChevronRight size={16} className="ml-auto opacity-50" />}
+                            {activeView === item.id && (
+                                <ChevronRight
+                                    size={16}
+                                    className="ml-auto opacity-50"
+                                />
+                            )}
                         </button>
                     ))}
                 </nav>
 
                 <div className="pt-8 mt-8 border-t border-zinc-50 space-y-2">
                     <button className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold transition-all group">
-                        <Settings size={22} className="text-zinc-400 group-hover:text-emerald-500 transition-colors" />
+                        <Settings
+                            size={22}
+                            className="text-zinc-400 group-hover:text-emerald-500 transition-colors"
+                        />
                         <span className="text-sm">Settings</span>
                     </button>
                     <button
@@ -267,7 +311,10 @@ export default function CustomerDashboardPage() {
                         }}
                         className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-500 hover:bg-red-50 font-bold transition-all group mt-2"
                     >
-                        <LogOut size={22} className="text-red-400 group-hover:text-red-600 transition-colors" />
+                        <LogOut
+                            size={22}
+                            className="text-red-400 group-hover:text-red-600 transition-colors"
+                        />
                         <span className="text-sm">Logout</span>
                     </button>
                 </div>
@@ -282,8 +329,12 @@ export default function CustomerDashboardPage() {
                         />
                     </div>
                     <div className="flex-1 overflow-hidden">
-                        <p className="text-xs font-black text-zinc-900 truncate">{dashboardData?.user_name || "Alex Rivera"}</p>
-                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Premium Member</p>
+                        <p className="text-xs font-black text-zinc-900 truncate">
+                            {dashboardData?.user_name || "Alex Rivera"}
+                        </p>
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
+                            Premium Member
+                        </p>
                     </div>
                 </div>
             </aside>
@@ -304,11 +355,16 @@ export default function CustomerDashboardPage() {
 
                     <div className="flex items-center gap-6">
                         <button className="relative w-12 h-12 bg-white rounded-2xl border border-zinc-100 flex items-center justify-center text-zinc-400 hover:bg-emerald-50 hover:text-emerald-500 transition-all group shadow-sm">
-                            <Bell size={20} className="group-hover:rotate-12 transition-transform" />
+                            <Bell
+                                size={20}
+                                className="group-hover:rotate-12 transition-transform"
+                            />
                             <span className="absolute top-3.5 right-3.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
                         </button>
                         <div className="h-10 w-[1px] bg-zinc-100 mx-2"></div>
-                        <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">Zenith Portal</span>
+                        <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">
+                            Zenith Portal
+                        </span>
                     </div>
                 </header>
 

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import CustomerDetails from "@/components/customerOnboarding/CustomerDetails";
 import CustomerOnboardingConfirmation from "@/components/customerOnboarding/CustomerOnboardingConfirmation";
-
+import { useSessionManager } from "@/components/Auth/SessionManager";
 export interface CustomerFormData {
     username: string;
     email: string;
@@ -19,6 +19,7 @@ export default function CustomerOnboardingPage() {
     const [step, setStep] = useState<OnboardingStep>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const sessionManager = useSessionManager();
 
     const handleDetailsSubmit = async (data: CustomerFormData) => {
         setIsSubmitting(true);
@@ -42,6 +43,8 @@ export default function CustomerOnboardingPage() {
             const result = await response.json();
 
             if (response.ok) {
+                console.log("Account created successfully:", result);
+                sessionManager.setToken(result.token);
                 setStep(2);
             } else {
                 // Handle field-specific errors or general detail error

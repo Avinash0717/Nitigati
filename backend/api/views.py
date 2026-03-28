@@ -176,9 +176,13 @@ def customer_create(request):
         # Save to DB — creates User + Customer in serializer.create()
         customer = serializer.save()
         
+        token = Token.objects.create(user=customer.user)  # type: ignore ; token, created
+
         return Response(
             {
+
                 "uuid": str(customer.uuid),
+                "token": token.key,
                 "message": "Customer created successfully"
             },
             status=status.HTTP_201_CREATED

@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useCookies } from "next-client-cookies";
 
 type SessionManager = {
@@ -12,24 +13,40 @@ type SessionManager = {
 
 export function useSessionManager(): SessionManager {
     const cookie = useCookies();
-    const authToken = cookie.get("authToken") || null;
-    const isLoggedIn = !!authToken;
+    const [authToken, setAuthToken] = useState<string | null>(
+        cookie.get("authToken") || null,
+    );
+    const isLoggedIn = authToken !== null;
+
+    const getToken = (): string | null => {
+        return authToken || cookie.get("authToken") || null;
+    };
+
+    const setToken = (token: string) => {
+        cookie.set("authToken", token, {
+            path: "/",
+            expires: 7,
+        });
+        setAuthToken(token);
+    };
+
+    const clearToken = () => {
+        cookie.remove("authToken", {
+            path: "/",
+        });
+        setAuthToken(null);
+    };
+
+    const isAuthorized = (_resource: string): boolean => {
+        return getToken() !== null;
+    };
 
     return {
         isLoggedIn,
         authToken,
-        getToken: () => authToken,
-        setToken: (token: string) => {
-            cookie.set("authToken", token, {
-                path: "/",
-                expires: 7,
-            });
-        },
-        clearToken: () => {
-            cookie.remove("authToken", {
-                path: "/",
-            });
-        },
-        isAuthorized: (_resource: string) => isLoggedIn,
+        getToken,
+        setToken,
+        clearToken,
+        isAuthorized,
     };
 }

@@ -8,7 +8,7 @@ import OnboardingConfirmation from "@/components/providerOnboarding/OnboardingCo
 import AI_Onboarding, {
     AIOnboardingFormData,
 } from "@/components/providerOnboarding/AI_Onboarding";
-
+import { useSessionManager } from "@/components/Auth/SessionManager";
 // --- Page Local Interfaces ---
 
 export interface OnboardingFormData {
@@ -45,6 +45,7 @@ export default function ProviderOnboardingPage() {
         "manual" | "ai" | null
     >(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const sessionManager = useSessionManager();
 
     const handleTypeSelect = (type: "manual" | "ai") => {
         setOnboardingMethod(type);
@@ -88,19 +89,20 @@ export default function ProviderOnboardingPage() {
                 const errorData = await response.json();
                 throw new Error(
                     errorData.error ||
-                    errorData.detail ||
-                    "Failed to create provider",
+                        errorData.detail ||
+                        "Failed to create provider",
                 );
             }
 
             const data = await response.json();
+            sessionManager.setToken(data.token);
             console.log("Provider created successfully:", data);
             setCurrentStep(3);
         } catch (err: any) {
             console.error("Onboarding Error:", err);
             alert(
                 err.message ||
-                "An unexpected error occurred. Please try again.",
+                    "An unexpected error occurred. Please try again.",
             );
         } finally {
             setIsSubmitting(false);
@@ -136,8 +138,8 @@ export default function ProviderOnboardingPage() {
                 const errorData = await response.json();
                 throw new Error(
                     errorData.error ||
-                    errorData.detail ||
-                    "Failed to process AI onboarding",
+                        errorData.detail ||
+                        "Failed to process AI onboarding",
                 );
             }
 
@@ -148,7 +150,7 @@ export default function ProviderOnboardingPage() {
             console.error("AI Onboarding Error:", err);
             alert(
                 err.message ||
-                "An unexpected error occurred. Please try again.",
+                    "An unexpected error occurred. Please try again.",
             );
         } finally {
             setIsSubmitting(false);
@@ -176,9 +178,7 @@ export default function ProviderOnboardingPage() {
                     <OnboardingDetails
                         onSubmit={handleDetailsSubmit}
                         isLoading={isSubmitting}
-                        onSwitchToAI={() =>
-                            setOnboardingMethod("ai")
-                        }
+                        onSwitchToAI={() => setOnboardingMethod("ai")}
                     />
                 );
             case 3:

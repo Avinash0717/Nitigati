@@ -9,7 +9,6 @@ def serve_file(request, prefix, filepath):
 		raise Http404("Invalid path")
 
 	full_path = os.path.normpath(os.path.join(base_dir, prefix, filepath))
-
 	# 🔒 Security check (VERY important)
 	if not full_path.startswith(base_dir):
 		raise Http404("Invalid file path")

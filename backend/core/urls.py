@@ -25,5 +25,5 @@ urlpatterns = [
     path('api/', include('api.urls')),
 
     # Static media serve routes
-    path('services/media/<path:filepath>', serve_file, {'prefix': 'services/media'}),
+    path('media/services/media/<path:filepath>', serve_file, {'prefix': 'services/media'}),
 ]
