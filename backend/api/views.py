@@ -10,7 +10,9 @@ import json
 from .serializers import (
     ProviderCreateSerializer, ProviderImageUploadSerializer, 
     CustomerSerializer, ProviderAIOnboardingSerializer,
-    ServiceCreateSerializer, ServiceReadSerializer
+    ServiceCreateSerializer, ServiceReadSerializer,
+    CustomerDashboardSerializer, CustomerOrderSerializer,
+    CustomerTransactionSerializer, CustomerMessageSerializer
 )
 from rest_framework.authtoken.models import Token # type: ignore
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication # type: ignore
@@ -530,3 +532,108 @@ def service_detail(request, uuid):
     
     serializer = ServiceReadSerializer(service, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def customer_dashboard_summary(request):
+    """
+    GET /api/customer/dashboard/
+    Returns summary stats for the customer dashboard.
+    """
+    # In a real app, fetch from DB
+    # customer = request.user.customer_profile
+    
+    data = {
+        "user_name": request.user.first_name or "Alex",
+        "greeting": "Your digital artisan ecosystem is thriving today.",
+        "active_orders": [
+            {
+                "id": "1",
+                "service_title": "Quantum System Audit",
+                "provider_name": "Neural Logic Labs",
+                "status": "IN PROGRESS",
+                "amount": 1240.00,
+                "status_color": "emerald" # for UI hints
+            },
+            {
+                "id": "2",
+                "service_title": "Brand Identity Overhaul",
+                "provider_name": "Studio Zenith",
+                "status": "AWAITING CONFIRMATION",
+                "amount": 3500.00,
+                "status_color": "zinc"
+            },
+            {
+                "id": "3",
+                "service_title": "Strategic Tax Planning",
+                "provider_name": "Global FinTech",
+                "status": "IN PROGRESS",
+                "amount": 850.00,
+                "status_color": "emerald"
+            }
+        ],
+        "recent_activity": [
+            {
+                "id": "1",
+                "type": "message",
+                "content": "New message from Studio Zenith: 'The initial wireframes for the identity overhaul are ready...'",
+                "time_ago": "12M AGO",
+                "icon_type": "message"
+            },
+            {
+                "id": "2",
+                "type": "payment",
+                "content": "Payment Verified: Milestone 1 payment for 'Strategic Tax Planning' has been successfully processed.",
+                "time_ago": "2H AGO",
+                "icon_type": "payment"
+            },
+            {
+                "id": "3",
+                "type": "order",
+                "content": "Order Completed: 'Quarterly Performance Review' with Alex Artisan was marked as complete.",
+                "time_ago": "YESTERDAY",
+                "icon_type": "check"
+            }
+        ],
+        "stats": {
+            "total_investment": 5590.00,
+            "active_projects": 4,
+            "saved_experts": 12
+        }
+    }
+    
+    serializer = CustomerDashboardSerializer(data)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def customer_orders_list(request):
+    """GET /api/customer/orders/"""
+    # For now return empty list as requested for placeholder screens
+    return Response([])
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def customer_transactions_list(request):
+    """GET /api/customer/transactions/"""
+    return Response([])
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def customer_messages_list(request):
+    """GET /api/customer/messages/"""
+    return Response([])
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def customer_discover_services_list(request):
+    """GET /api/customer/discover-services/"""
+    # Simply return all active services for discovery
+    services = Service.objects.filter(is_active=True).prefetch_related('tags', 'media')
+    serializer = ServiceReadSerializer(services, many=True, context={'request': request})
+    return Response(serializer.data)

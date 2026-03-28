@@ -258,3 +258,51 @@ class ServiceReadSerializer(serializers.ModelSerializer):
 
     def get_price_range(self, obj):
         return f"₹{obj.price_min} - ₹{obj.price_max}"
+
+class CustomerOrderSerializer(serializers.Serializer):
+    """Serializer for active orders in the customer dashboard."""
+    id = serializers.CharField()
+    service_title = serializers.CharField()
+    provider_name = serializers.CharField()
+    status = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    image_url = serializers.URLField(required=False, allow_null=True)
+    status_color = serializers.CharField(required=False)
+
+class CustomerActivitySerializer(serializers.Serializer):
+    """Serializer for recent activity items."""
+    id = serializers.CharField()
+    type = serializers.CharField() # message, payment, order
+    content = serializers.CharField()
+    time_ago = serializers.CharField()
+    icon_type = serializers.CharField()
+
+class CustomerStatsSerializer(serializers.Serializer):
+    """Serializer for the service overview panel."""
+    total_investment = serializers.DecimalField(max_digits=12, decimal_places=2)
+    active_projects = serializers.IntegerField()
+    saved_experts = serializers.IntegerField()
+
+class CustomerDashboardSerializer(serializers.Serializer):
+    """Main serializer for the customer dashboard summary."""
+    user_name = serializers.CharField()
+    greeting = serializers.CharField()
+    active_orders = CustomerOrderSerializer(many=True)
+    recent_activity = CustomerActivitySerializer(many=True)
+    stats = CustomerStatsSerializer()
+
+class CustomerTransactionSerializer(serializers.Serializer):
+    """Serializer for customer transactions."""
+    id = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    date = serializers.CharField()
+    status = serializers.CharField()
+    provider_name = serializers.CharField()
+
+class CustomerMessageSerializer(serializers.Serializer):
+    """Serializer for customer messages."""
+    id = serializers.CharField()
+    sender_name = serializers.CharField()
+    last_message = serializers.CharField()
+    time = serializers.CharField()
+    unread_count = serializers.IntegerField(default=0)

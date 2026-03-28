@@ -1,248 +1,331 @@
 "use client";
 
-// import React from 'react';
-
-// export default function CustomerDashboardPlaceholder() {
-//     return (
-//         <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4">
-//             <div className="bg-white p-12 rounded-[32px] shadow-sm border border-gray-100 text-center max-w-md w-full">
-//                 <div className="w-16 h-16 bg-[#00FF85]/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-//                     <div className="w-8 h-8 bg-[#00FF85] rounded-lg" />
-//                 </div>
-//                 <h1 className="text-2xl font-bold text-[#1E293B] mb-3">
-//                     Customer Dashboard
-//                 </h1>
-//                 <p className="text-[#64748B] font-medium italic">
-//                     (Coming Soon)
-//                 </p>
-//                 <div className="mt-8 pt-8 border-t border-gray-50 flex justify-center gap-4">
-//                     <div className="w-full h-2 bg-gray-50 rounded-full overflow-hidden">
-//                         <div className="w-1/3 h-full bg-[#00FF85]/30 rounded-full" />
-//                     </div>
-//                 </div>
-//             </div>
-//         </div>
-//     );
-// }
-
-import { MessageSquare, Star } from "lucide-react";
-import { useSessionManager } from "@/components/Auth/SessionManager";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-export default function ExpertsPage() {
+import {
+    LayoutDashboard,
+    ShoppingBag,
+    History,
+    MessageSquare,
+    Search,
+    Settings,
+    LogOut,
+    Bell,
+    ChevronRight,
+    Compass,
+} from "lucide-react";
+
+// Components
+import Dashboard from "@/components/customerDashboard/Dashboard";
+import CustomerOrders from "@/components/customerDashboard/customerOrders/CustomerOrders";
+import CustomerTransactions from "@/components/customerDashboard/customerTransactions/CustomerTransactions";
+import CustomerMessages from "@/components/customerDashboard/customerMessages/CustomerMessages";
+import CustomerDiscoverServices from "@/components/customerDashboard/customerDiscoverServices/CustomerDiscoverServices";
+import { useSessionManager } from "@/components/Auth/SessionManager";
+
+// --- INTERFACES ---
+
+export interface CustomerOrder {
+    id: string;
+    service_title: string;
+    provider_name: string;
+    status: string;
+    amount: number;
+    image_url?: string;
+    status_color?: string;
+}
+
+export interface CustomerActivity {
+    id: string;
+    type: string;
+    content: string;
+    time_ago: string;
+    icon_type: string;
+}
+
+export interface CustomerStats {
+    total_investment: number;
+    active_projects: number;
+    saved_experts: number;
+}
+
+export interface CustomerDashboardData {
+    user_name: string;
+    greeting: string;
+    active_orders: CustomerOrder[];
+    recent_activity: CustomerActivity[];
+    stats: CustomerStats;
+}
+
+export interface CustomerTransaction {
+    id: string;
+    amount: number;
+    date: string;
+    status: string;
+    provider_name: string;
+}
+
+export interface CustomerMessage {
+    id: string;
+    sender_name: string;
+    last_message: string;
+    time: string;
+    unread_count: number;
+}
+
+export interface DiscoverService {
+    id: string;
+    uuid: string;
+    title: string;
+    description: string;
+    tags: string[];
+    images: string[];
+    price_range: string;
+    provider_id: string;
+    location?: string;
+    verification_status: string;
+}
+
+type ViewType =
+    | "dashboard"
+    | "orders"
+    | "transactions"
+    | "messages"
+    | "discover services";
+
+export default function CustomerDashboardPage() {
     const router = useRouter();
     const sessionManager = useSessionManager();
-    if (!sessionManager.isLoggedIn) {
-        router.push("/login");
-        return null;
-    }
-    return (
-        <div className="min-h-screen bg-[#f7faf8]">
-            {/* ================= HEADER ================= */}
-            <header className="border-b bg-white">
-                <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                        <span className="text-xl font-bold">Nitignati</span>
+    const [activeView, setActiveView] = useState<ViewType>("dashboard");
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-                        <input
-                            type="text"
-                            placeholder="Search for experts..."
-                            className="w-72 rounded-md border px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500"
+    // Dynamic Data State
+    const [dashboardData, setDashboardData] = useState<CustomerDashboardData | null>(null);
+    const [orders, setOrders] = useState<CustomerOrder[]>([]);
+    const [transactions, setTransactions] = useState<CustomerTransaction[]>([]);
+    const [messages, setMessages] = useState<CustomerMessage[]>([]);
+    const [discoverServices, setDiscoverServices] = useState<DiscoverService[]>([]);
+
+    // Redirect if not logged in
+    useEffect(() => {
+        if (!sessionManager.isLoggedIn) {
+            router.push("/login");
+        }
+    }, [sessionManager.isLoggedIn, router]);
+
+    // Fetch Dashboard Data
+    useEffect(() => {
+        if (!sessionManager.isLoggedIn) return;
+
+        async function fetchInitialData() {
+            setLoading(true);
+            try {
+                const token = sessionManager.getToken();
+                const response = await fetch("/api/customer/customerDashboard/dashboard", {
+                    headers: {
+                        Authorization: `Token ${token}`,
+                    },
+                });
+
+                if (!response.ok) throw new Error("Failed to fetch dashboard data");
+                const result = await response.json();
+                setDashboardData(result);
+            } catch (err: any) {
+                console.error("Dashboard Load Error:", err);
+                setError(err.message || "Failed to load dashboard");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchInitialData();
+    }, [sessionManager]);
+
+    // Fetch View-Specific Data
+    const handleViewChange = async (view: ViewType) => {
+        setActiveView(view);
+        if (!sessionManager.isLoggedIn) return;
+        const token = sessionManager.getToken();
+
+        try {
+            if (view === "orders") {
+                const res = await fetch("/api/customer/customerDashboard/order", {
+                    headers: { Authorization: `Token ${token}` }
+                });
+                if (res.ok) setOrders(await res.json());
+            } else if (view === "transactions") {
+                const res = await fetch("/api/customer/customerDashboard/transaction", {
+                    headers: { Authorization: `Token ${token}` }
+                });
+                if (res.ok) setTransactions(await res.json());
+            } else if (view === "messages") {
+                const res = await fetch("/api/customer/customerDashboard/messages", {
+                    headers: { Authorization: `Token ${token}` }
+                });
+                if (res.ok) setMessages(await res.json());
+            } else if (view === "discover services") {
+                const res = await fetch("/api/customer/customerDashboard/discoverServices", {
+                    headers: { Authorization: `Token ${token}` }
+                });
+                if (res.ok) setDiscoverServices(await res.json());
+            }
+        } catch (err) {
+            console.error(`Error fetching ${view} data:`, err);
+        }
+    };
+
+    const navItems = [
+        { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { id: "orders", label: "Orders", icon: ShoppingBag },
+        { id: "transactions", label: "Transactions", icon: History },
+        { id: "messages", label: "Messages", icon: MessageSquare },
+        { id: "discover services", label: "Discover Services", icon: Compass },
+    ];
+
+    const renderContent = () => {
+        if (loading && activeView === "dashboard") {
+            return (
+                <div className="flex items-center justify-center min-h-[400px]">
+                    <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+                </div>
+            );
+        }
+
+        if (error) {
+            return (
+                <div className="bg-red-50 text-red-600 p-8 rounded-[2rem] border border-red-100 text-center max-w-md mx-auto mt-20">
+                    <p className="font-black mb-4">Error loading data</p>
+                    <p className="text-sm font-medium mb-6">{error}</p>
+                    <button onClick={() => window.location.reload()} className="bg-red-600 text-white px-6 py-2 rounded-xl text-xs font-black">
+                        Try Again
+                    </button>
+                </div>
+            );
+        }
+
+        switch (activeView) {
+            case "dashboard":
+                return dashboardData ? <Dashboard data={dashboardData} /> : null;
+            case "orders":
+                return <CustomerOrders orders={orders} />;
+            case "transactions":
+                return <CustomerTransactions transactions={transactions} />;
+            case "messages":
+                return <CustomerMessages messages={messages} />;
+            case "discover services":
+                return <CustomerDiscoverServices services={discoverServices} />;
+            default:
+                return null;
+        }
+    };
+
+    if (!sessionManager.isLoggedIn) return null;
+
+    return (
+        <div className="min-h-screen bg-[#f8fafb] font-sans selection:bg-emerald-100 selection:text-emerald-900 flex">
+            {/* Sidebar */}
+            <aside className="w-72 bg-white border-r border-zinc-100 flex flex-col p-8 fixed h-full z-20">
+                <Link href="/" className="flex items-center gap-3 group mb-16">
+                    <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 shadow-lg shadow-emerald-500/20">
+                        <span className="text-white font-black text-2xl italic pt-1">N</span>
+                    </div>
+                    <div>
+                        <span className="text-2xl font-black tracking-tighter block leading-none">Nitigati</span>
+                        <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400">Customer Client</span>
+                    </div>
+                </Link>
+
+                <nav className="space-y-2 flex-1">
+                    {navItems.map((item) => (
+                        <button
+                            key={item.id}
+                            onClick={() => handleViewChange(item.id as ViewType)}
+                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${
+                                activeView === item.id 
+                                ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20" 
+                                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
+                            }`}
+                        >
+                            <item.icon size={22} className={`${activeView === item.id ? "text-white" : "text-zinc-400 group-hover:text-emerald-500"} transition-colors`} />
+                            <span className="text-sm">{item.label}</span>
+                            {activeView === item.id && <ChevronRight size={16} className="ml-auto opacity-50" />}
+                        </button>
+                    ))}
+                </nav>
+
+                <div className="pt-8 mt-8 border-t border-zinc-50 space-y-2">
+                    <button className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold transition-all group">
+                        <Settings size={22} className="text-zinc-400 group-hover:text-emerald-500 transition-colors" />
+                        <span className="text-sm">Settings</span>
+                    </button>
+                    <button
+                        onClick={() => {
+                            sessionManager.clearToken();
+                            router.push("/login");
+                        }}
+                        className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-500 hover:bg-red-50 font-bold transition-all group mt-2"
+                    >
+                        <LogOut size={22} className="text-red-400 group-hover:text-red-600 transition-colors" />
+                        <span className="text-sm">Logout</span>
+                    </button>
+                </div>
+
+                {/* User Profile */}
+                <div className="mt-12 flex items-center gap-4 p-2 bg-zinc-50/50 rounded-2xl border border-zinc-100/50">
+                    <div className="w-12 h-12 bg-zinc-200 rounded-xl overflow-hidden border-2 border-white shadow-sm">
+                        <img
+                            src={`https://ui-avatars.com/api/?name=${dashboardData?.user_name || "User"}&background=00ff7f&color=fff`}
+                            alt="User Profile"
+                            className="w-full h-full object-cover"
                         />
                     </div>
-
-                    <div className="flex items-center gap-4 text-sm">
-                        <button>Explore</button>
-                        <button>About</button>
-                        <button className="rounded-md bg-gray-100 px-4 py-2">
-                            Login
-                        </button>
-                        <button className="rounded-md bg-green-500 px-4 py-2 text-white">
-                            Sign Up
-                        </button>
+                    <div className="flex-1 overflow-hidden">
+                        <p className="text-xs font-black text-zinc-900 truncate">{dashboardData?.user_name || "Alex Rivera"}</p>
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Premium Member</p>
                     </div>
                 </div>
-            </header>
+            </aside>
 
-            {/* ================= MAIN ================= */}
-            <main className="mx-auto max-w-7xl px-6 py-10 grid grid-cols-12 gap-8">
-                {/* ================= FILTERS ================= */}
-                <aside className="col-span-3 space-y-8">
-                    <div>
-                        <h3 className="font-semibold mb-4">Filters</h3>
-
-                        <div className="space-y-3 text-sm">
-                            <p className="font-medium text-gray-500">
-                                CATEGORY
-                            </p>
-
-                            <label className="flex items-center gap-2">
-                                <input type="checkbox" />
-                                All Services
-                            </label>
-
-                            <label className="flex items-center gap-2 text-green-600">
-                                <input type="checkbox" defaultChecked />
-                                Content Writing
-                            </label>
-
-                            <label className="flex items-center gap-2">
-                                <input type="checkbox" />
-                                Visual Design
-                            </label>
-
-                            <label className="flex items-center gap-2">
-                                <input type="checkbox" />
-                                Market Strategy
-                            </label>
-
-                            <label className="flex items-center gap-2">
-                                <input type="checkbox" />
-                                Tech Support
-                            </label>
+            {/* Main Content Area */}
+            <main className="flex-1 ml-72 flex flex-col">
+                <header className="h-24 bg-white/80 backdrop-blur-md border-b border-zinc-100 px-10 flex items-center justify-between sticky top-0 z-10 transition-all">
+                    <div className="max-w-xl w-full relative group">
+                        <div className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-300 group-focus-within:text-emerald-500 transition-colors">
+                            <Search size={20} />
                         </div>
-                    </div>
-
-                    <div>
-                        <p className="mb-2 text-sm font-medium text-gray-500">
-                            PRICE RANGE
-                        </p>
                         <input
-                            type="range"
-                            className="w-full accent-green-500"
+                            type="text"
+                            placeholder="Search, providers, or orders..."
+                            className="w-full h-12 bg-zinc-50 rounded-2xl pl-14 pr-6 border-2 border-transparent focus:border-emerald-500/20 focus:bg-white focus:ring-4 focus:ring-emerald-500/5 transition-all text-sm font-bold text-zinc-700 outline-none placeholder:text-zinc-300"
                         />
-                        <div className="mt-1 flex justify-between text-xs text-gray-500">
-                            <span>$0</span>
-                            <span>$5,000+</span>
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                        <button className="relative w-12 h-12 bg-white rounded-2xl border border-zinc-100 flex items-center justify-center text-zinc-400 hover:bg-emerald-50 hover:text-emerald-500 transition-all group shadow-sm">
+                            <Bell size={20} className="group-hover:rotate-12 transition-transform" />
+                            <span className="absolute top-3.5 right-3.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                        </button>
+                        <div className="h-10 w-[1px] bg-zinc-100 mx-2"></div>
+                        <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">Zenith Portal</span>
+                    </div>
+                </header>
+
+                <div className="p-10 max-w-7xl mx-auto w-full">
+                    <div className="mb-12">
+                        <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-2">
+                            <span>Nitigati Client</span>
+                            <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
+                            <span>{activeView}</span>
                         </div>
+                        <h2 className="text-4xl font-black text-zinc-900 tracking-tight capitalize">
+                            {activeView}
+                        </h2>
                     </div>
 
-                    <div>
-                        <p className="mb-2 text-sm font-medium text-gray-500">
-                            SERVICE LOCATION
-                        </p>
-                        <div className="rounded-md border p-3 text-sm">
-                            Remote First
-                        </div>
-                    </div>
-
-                    <button className="w-full rounded-md bg-green-100 py-2 text-sm text-green-700">
-                        Reset All Filters
-                    </button>
-
-                    <div className="rounded-xl bg-[#132d1f] p-6 text-white">
-                        <h4 className="mb-2 font-semibold">
-                            Need help finding the right expert?
-                        </h4>
-                        <p className="mb-4 text-sm text-gray-200">
-                            Speak with a project advisor for a custom match.
-                        </p>
-                        <button className="rounded-md bg-green-500 px-4 py-2 text-sm">
-                            Get Advice →
-                        </button>
-                    </div>
-                </aside>
-
-                {/* ================= CONTENT ================= */}
-                <section className="col-span-9 space-y-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-semibold">
-                                Expert Service Providers
-                            </h1>
-                            <p className="text-sm text-gray-500">
-                                142 verified experts available for your project
-                            </p>
-                        </div>
-
-                        <select className="rounded-md border px-3 py-2 text-sm">
-                            <option>Highest Rated</option>
-                            <option>Lowest Price</option>
-                            <option>Fastest Response</option>
-                        </select>
-                    </div>
-
-                    {/* ================= CARD ================= */}
-                    {[1, 2, 3].map((_, i) => (
-                        <div
-                            key={i}
-                            className="flex items-center justify-between rounded-xl border bg-white p-6"
-                        >
-                            <div className="flex gap-5">
-                                <div className="h-16 w-16 rounded-xl bg-gray-200" />
-
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="font-semibold">
-                                            Arjun Mehta
-                                        </h3>
-                                        <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">
-                                            PRO
-                                        </span>
-                                    </div>
-
-                                    <p className="text-sm text-green-700">
-                                        Professional Copywriter & Content
-                                        Strategist
-                                    </p>
-
-                                    <p className="max-w-xl text-sm text-gray-500">
-                                        Helping businesses find their unique
-                                        voice through clear, engaging content.
-                                        Specialized in websites, brand stories,
-                                        and marketing copy.
-                                    </p>
-
-                                    <div className="pt-1 flex gap-4 text-xs text-gray-500">
-                                        <span>MUMBAI, REMOTE</span>
-                                        <span>EST. $300 – $800 / PROJECT</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col items-end gap-3">
-                                <div className="flex items-center gap-1 text-sm">
-                                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                    <span className="font-medium">4.9</span>
-                                    <span className="text-gray-500">
-                                        (120+)
-                                    </span>
-                                </div>
-
-                                <button className="flex items-center gap-2 rounded-md bg-green-500 px-4 py-2 text-sm text-white">
-                                    <MessageSquare className="h-4 w-4" />
-                                    Discuss Order
-                                </button>
-
-                                <span className="text-xs text-gray-500">
-                                    Avg. response: 2 hours
-                                </span>
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* ================= PAGINATION ================= */}
-                    <div className="flex justify-center items-center gap-2 pt-6">
-                        <button className="rounded-md border px-3 py-2">
-                            ‹
-                        </button>
-                        <button className="rounded-md bg-green-500 px-3 py-2 text-white">
-                            1
-                        </button>
-                        <button className="rounded-md border px-3 py-2">
-                            2
-                        </button>
-                        <button className="rounded-md border px-3 py-2">
-                            3
-                        </button>
-                        <span className="px-2">...</span>
-                        <button className="rounded-md border px-3 py-2">
-                            12
-                        </button>
-                        <button className="rounded-md border px-3 py-2">
-                            ›
-                        </button>
-                    </div>
-                </section>
+                    {renderContent()}
+                </div>
             </main>
         </div>
     );
