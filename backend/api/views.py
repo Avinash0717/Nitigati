@@ -680,8 +680,18 @@ def customer_dashboard_summary(request):
 @permission_classes([IsAuthenticated])
 def customer_orders_list(request):
     """GET /api/customer/orders/"""
-    # For now return empty list as requested for placeholder screens
-    return Response([])
+    orders = Order.objects.filter(customer=request.user).select_related('service', 'provider')
+    serializer = OrderSerializer(orders, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def provider_orders_list(request):
+    """GET /api/provider/orders/"""
+    orders = Order.objects.filter(provider=request.user).select_related('service', 'customer')
+    serializer = OrderSerializer(orders, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication])
@@ -726,29 +736,63 @@ def order_create(request):
     """
     POST /api/orders/create/
     Creates an Order record.
-    Provider = request.user (authenticated).
-    Customer = first Customer in DB (temporary).
-    Service = first Service in DB (temporary).
+    Provider = request.user (must have provider_profile).
+    Customer = resolved from chat room if room_name provided, else legacy fallback.
+    Service = first Service of the provider.
     """
+    # 1. Ensure the user is a provider
+    if not hasattr(request.user, 'provider_profile'):
+        return Response(
+            {"error": "Only providers can accept orders and create them."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    provider_profile = request.user.provider_profile
+    room_name = request.data.get('room_name')
+    
     serializer = OrderSerializer(data=request.data)
     if serializer.is_valid():
-        customer = Customer.objects.first()
-        service = Service.objects.first()
+        from chat.models import Room
+        
+        customer_user = None
+        
+        # 2. Resolve Customer from Room
+        if room_name:
+            try:
+                room = Room.objects.get(name=room_name)
+                # Customer is the OTHER participant in the room
+                customer_user = room.participants.exclude(id=request.user.id).first()
+            except Room.DoesNotExist:
+                pass
+        
+        # 3. Fallback (Legacy/Safety)
+        if not customer_user:
+            customer_profile = Customer.objects.first()
+            if customer_profile:
+                customer_user = customer_profile.user
+        
+        # 4. Resolve Service (Provider's own service)
+        service = Service.objects.filter(provider=provider_profile).first()
+        if not service:
+            # Absolute fallback if provider has no services yet
+            service = Service.objects.first()
 
-        if not customer or not service:
+        if not customer_user or not service:
             return Response(
-                {"error": "Missing base data. Ensure at least one Customer and one Service exist."},
+                {"error": "Could not resolve customer or service for this order."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # 5. Save with Explicit Roles
         order = serializer.save(
             provider=request.user,
-            customer=customer.user,
+            customer=customer_user,
             service=service,
+            status='accepted' if room_name else 'pending'
         )
         return Response(
             {
-                "message": "Order created successfully.",
+                "message": "Order created successfully correctly mapping roles.",
                 "order_id": str(order.order_id),
                 "status": order.status,
             },

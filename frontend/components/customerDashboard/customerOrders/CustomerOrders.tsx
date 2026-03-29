@@ -1,12 +1,21 @@
 import React from "react";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBag, ArrowRight } from "lucide-react";
 import { CustomerOrder } from "@/app/customerDashboard/page";
 
 interface CustomerOrdersProps {
     orders: CustomerOrder[];
+    loading?: boolean;
 }
 
-export default function CustomerOrders({ orders }: CustomerOrdersProps) {
+export default function CustomerOrders({ orders, loading }: CustomerOrdersProps) {
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-100">
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+            </div>
+        );
+    }
+
     if (orders.length === 0) {
         return (
             <div className="bg-white p-20 rounded-[3rem] border border-zinc-100 shadow-sm text-center">
@@ -27,20 +36,21 @@ export default function CustomerOrders({ orders }: CustomerOrdersProps) {
     return (
         <div className="space-y-6">
             {orders.map((order) => (
-                <div key={order.id} className="bg-white p-8 rounded-[2.5rem] border border-zinc-100 shadow-sm flex items-center justify-between group hover:border-emerald-500/20 transition-all">
+                <div key={order.order_id} className="bg-white p-8 rounded-[2.5rem] border border-zinc-100 shadow-sm flex items-center justify-between group hover:border-emerald-500/20 transition-all">
                     <div className="flex items-center gap-6">
-                        <div className="w-16 h-16 bg-zinc-100 rounded-2xl overflow-hidden">
-                             <img src={order.image_url || `https://ui-avatars.com/api/?name=${order.service_title}&background=random`} alt="" className="w-full h-full object-cover" />
+                        <div className="w-16 h-16 bg-zinc-100 rounded-2xl overflow-hidden flex items-center justify-center text-emerald-500 font-black">
+                             <ShoppingBag />
                         </div>
                         <div>
                             <h4 className="font-black text-zinc-900 text-xl mb-1 group-hover:text-emerald-500 transition-colors uppercase tracking-tight">{order.service_title}</h4>
-                            <p className="text-zinc-400 text-sm font-bold tracking-tight">Provider: <span className="text-zinc-600">{order.provider_name}</span></p>
+                            <p className="text-zinc-400 text-sm font-bold tracking-tight">Provider: <span className="text-zinc-600 font-black">{order.provider_name}</span></p>
                         </div>
                     </div>
                     <div className="flex items-center gap-10">
                         <div className="text-right">
-                            <p className="font-black text-zinc-900 text-lg mb-1 italic">₹{order.amount.toLocaleString()}</p>
+                            <p className="font-black text-zinc-900 text-lg mb-1 italic">₹{order.price}</p>
                             <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full">{order.status}</span>
+                            <p className="text-[10px] text-zinc-400 font-black mt-2 uppercase tracking-widest">Delivery: {order.delivery_date}</p>
                         </div>
                         <button className="h-12 w-12 bg-zinc-50 rounded-xl flex items-center justify-center text-zinc-400 hover:bg-emerald-500 hover:text-white transition-all">
                              <ArrowRight size={20} />
@@ -52,4 +62,3 @@ export default function CustomerOrders({ orders }: CustomerOrdersProps) {
     );
 }
 
-import { ArrowRight } from "lucide-react";

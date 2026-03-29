@@ -352,6 +352,10 @@ class OrderSerializer(serializers.ModelSerializer):
     """Serializer for creating and reading Order records.
     customer, provider, and service are injected via save() in the view.
     """
+    service_title = serializers.CharField(source='service.title', read_only=True)
+    provider_name = serializers.CharField(source='provider.username', read_only=True)
+    customer_name = serializers.CharField(source='customer.username', read_only=True)
+    delivery_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -360,6 +364,15 @@ class OrderSerializer(serializers.ModelSerializer):
             'service', 'price', 'discount',
             'delivery_days', 'revisions', 'signature',
             'status', 'created_at', 'updated_at',
+            'service_title', 'provider_name', 'customer_name', 'delivery_date',
         ]
         read_only_fields = ['order_id', 'customer', 'provider', 'service', 'status', 'created_at', 'updated_at']
+
+    def get_delivery_date(self, obj):
+        from datetime import timedelta
+        if obj.created_at and obj.delivery_days:
+            delivery_dt = obj.created_at + timedelta(days=obj.delivery_days)
+            return delivery_dt.strftime('%b %d, %Y')
+        return None
+
 

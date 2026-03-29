@@ -30,13 +30,12 @@ import { ServiceDetail } from "@/app/providerDashboard/page";
 // --- INTERFACES ---
 
 export interface CustomerOrder {
-    id: string;
+    order_id: string;
     service_title: string;
     provider_name: string;
+    price: string;
+    delivery_date: string;
     status: string;
-    amount: number;
-    image_url?: string;
-    status_color?: string;
 }
 
 export interface CustomerActivity {
@@ -132,6 +131,7 @@ export default function CustomerDashboardPage() {
     const [dashboardData, setDashboardData] =
         useState<CustomerDashboardData | null>(null);
     const [orders, setOrders] = useState<CustomerOrder[]>([]);
+    const [ordersLoading, setOrdersLoading] = useState(false);
     const [transactions, setTransactions] = useState<CustomerTransaction[]>([]);
     const [messages, setMessages] = useState<CustomerMessage[]>([]);
     const [discoverData, setDiscoverData] =
@@ -196,6 +196,7 @@ export default function CustomerDashboardPage() {
 
         try {
             if (view === "orders") {
+                setOrdersLoading(true);
                 const res = await fetch(
                     "/api/customer/customerDashboard/order",
                     {
@@ -203,6 +204,7 @@ export default function CustomerDashboardPage() {
                     },
                 );
                 if (res.ok) setOrders(await res.json());
+                setOrdersLoading(false);
             } else if (view === "transactions") {
                 const res = await fetch(
                     "/api/customer/customerDashboard/transaction",
@@ -314,7 +316,7 @@ export default function CustomerDashboardPage() {
     const renderContent = () => {
         if ((loading && activeView === "dashboard") || detailLoading) {
             return (
-                <div className="flex items-center justify-center min-h-[400px]">
+                <div className="flex items-center justify-center min-h-100">
                     <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
                 </div>
             );
@@ -322,7 +324,7 @@ export default function CustomerDashboardPage() {
 
         if (error) {
             return (
-                <div className="bg-red-50 text-red-600 p-8 rounded-[2rem] border border-red-100 text-center max-w-md mx-auto mt-20">
+                <div className="bg-red-50 text-red-600 p-8 rounded-4xl border border-red-100 text-center max-w-md mx-auto mt-20">
                     <p className="font-black mb-4">Error loading data</p>
                     <p className="text-sm font-medium mb-6">{error}</p>
                     <button
@@ -344,7 +346,7 @@ export default function CustomerDashboardPage() {
                     />
                 ) : null;
             case "orders":
-                return <CustomerOrders orders={orders} />;
+                return <CustomerOrders orders={orders} loading={ordersLoading} />;
             case "transactions":
                 return <CustomerTransactions transactions={transactions} />;
             case "messages":
@@ -546,7 +548,7 @@ export default function CustomerDashboardPage() {
                             />
                             <span className="absolute top-3.5 right-3.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
                         </button>
-                        <div className="h-10 w-[1px] bg-zinc-100 mx-2"></div>
+                        <div className="h-10 w-px bg-zinc-100 mx-2"></div>
                         <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">
                             Zenith Portal
                         </span>

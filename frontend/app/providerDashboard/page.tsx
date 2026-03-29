@@ -25,6 +25,17 @@ import ProviderServices from "@/components/providerDashboard/providerServices/Pr
 import ProviderServicePage from "@/components/providerDashboard/providerServices/ProviderServicePage";
 import ProviderOrders from "@/components/providerDashboard/providerOrders/ProviderOrders";
 import { useSessionManager } from "@/components/Auth/SessionManager";
+// --- INTERFACES ---
+
+export interface ProviderOrder {
+    order_id: string;
+    service_title: string;
+    customer_name: string;
+    price: string;
+    delivery_date: string;
+    status: string;
+}
+
 // Interfaces
 interface RecentOrder {
     id: number;
@@ -138,6 +149,10 @@ export default function ProviderDashboardPage() {
     const [selectedRoom, setSelectedRoom] = useState<ProviderMessage | null>(null);
     const [chatView, setChatView] = useState<ChatViewType>("lobby");
     const [messagesLoading, setMessagesLoading] = useState(false);
+
+    // Orders State
+    const [orders, setOrders] = useState<ProviderOrder[]>([]);
+    const [ordersLoading, setOrdersLoading] = useState(false);
 
     useEffect(() => {
         async function fetchDashboardData() {
@@ -281,10 +296,31 @@ export default function ProviderDashboardPage() {
         }
     };
 
+    const fetchOrders = async () => {
+        setActiveView("orders");
+        const token = sessionManager.getToken();
+        if (!token) return;
+
+        setOrdersLoading(true);
+        try {
+            const response = await fetch("/api/providers/providerDashboard/order", {
+                headers: { Authorization: `Token ${token}` }
+            });
+            if (response.ok) {
+                setOrders(await response.json());
+            }
+        } catch (err) {
+            console.error("Error fetching provider orders:", err);
+            setError("Failed to load orders.");
+        } finally {
+            setOrdersLoading(false);
+        }
+    };
+
     const renderContent = () => {
         if (loading) {
             return (
-                <div className="flex items-center justify-center min-h-[400px]">
+                <div className="flex items-center justify-center min-h-100">
                     <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
                 </div>
             );
@@ -292,7 +328,7 @@ export default function ProviderDashboardPage() {
 
         if (error) {
             return (
-                <div className="bg-red-50 text-red-600 p-8 rounded-[2rem] border border-red-100 text-center max-w-md mx-auto mt-20">
+                <div className="bg-red-50 text-red-600 p-8 rounded-4xl border border-red-100 text-center max-w-md mx-auto mt-20">
                     <p className="font-black mb-4">
                         Oops! Something went wrong.
                     </p>
@@ -343,7 +379,7 @@ export default function ProviderDashboardPage() {
                     />
                 );
             case "orders":
-                return <ProviderOrders />;
+                return <ProviderOrders orders={orders} loading={ordersLoading} />;
             default:
                 return null;
         }
@@ -387,6 +423,8 @@ export default function ProviderDashboardPage() {
                                     fetchServices();
                                 } else if (item.id === "messages") {
                                     fetchMessages();
+                                } else if (item.id === "orders") {
+                                    fetchOrders();
                                 } else {
                                     setActiveView(item.id as ViewType);
                                 }

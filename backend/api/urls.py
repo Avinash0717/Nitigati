@@ -24,6 +24,9 @@ urlpatterns = [
     path("customer/messages/", views.customer_messages_list, name="customer-messages-list"),
     path("customer/discover-services/", views.customer_discover_services_list, name="customer-discover-services-list"),
 
+    # Provider Dashboard
+    path("provider/orders/", views.provider_orders_list, name="provider-orders-list"),
+
     # Orders
     path("orders/create/", views.order_create, name="order-create"),
 ]
