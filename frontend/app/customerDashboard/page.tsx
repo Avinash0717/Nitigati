@@ -119,8 +119,10 @@ export default function CustomerDashboardPage() {
     const [orders, setOrders] = useState<CustomerOrder[]>([]);
     const [transactions, setTransactions] = useState<CustomerTransaction[]>([]);
     const [messages, setMessages] = useState<CustomerMessage[]>([]);
-    const [discoverData, setDiscoverData] = useState<DiscoverServicesData | null>(null);
-    const [selectedService, setSelectedService] = useState<ServiceDetail | null>(null);
+    const [discoverData, setDiscoverData] =
+        useState<DiscoverServicesData | null>(null);
+    const [selectedService, setSelectedService] =
+        useState<ServiceDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
 
     // Redirect if not logged in
@@ -211,18 +213,16 @@ export default function CustomerDashboardPage() {
     const fetchServiceDetail = async (uuid: string) => {
         if (!sessionManager.isLoggedIn) return;
         const token = sessionManager.getToken();
-        
+
         setDetailLoading(true);
         try {
-            const response = await fetch(
-                `/api/providers/providerDashboard/services?id=${uuid}`,
-                {
-                    headers: {
-                        Authorization: `Token ${token}`,
-                    },
+            const response = await fetch(`/api/services?id=${uuid}`, {
+                headers: {
+                    Authorization: `Token ${token}`,
                 },
-            );
-            if (!response.ok) throw new Error("Failed to fetch service details");
+            });
+            if (!response.ok)
+                throw new Error("Failed to fetch service details");
             const result = await response.json();
 
             // Mapping backend response to ServiceDetail interface
@@ -238,7 +238,7 @@ export default function CustomerDashboardPage() {
                 price_range: result.price_range,
                 provider_id: result.provider_id,
                 location: result.location || "Location not specified",
-                created_at: result.created_at
+                created_at: result.created_at,
             };
 
             setSelectedService(mappedService);
@@ -295,12 +295,17 @@ export default function CustomerDashboardPage() {
             case "messages":
                 return <CustomerMessages messages={messages} />;
             case "discover services":
-                return <CustomerDiscoverServices data={discoverData} onServiceClick={fetchServiceDetail} />;
+                return (
+                    <CustomerDiscoverServices
+                        data={discoverData}
+                        onServiceClick={fetchServiceDetail}
+                    />
+                );
             case "service_detail":
                 return selectedService ? (
-                    <ProviderServicePage 
-                        service={selectedService} 
-                        onBack={() => setActiveView("discover services")} 
+                    <ProviderServicePage
+                        service={selectedService}
+                        onBack={() => setActiveView("discover services")}
                     />
                 ) : null;
             default:
@@ -371,7 +376,7 @@ export default function CustomerDashboardPage() {
                                     method: "POST",
                                     headers: {
                                         "Content-Type": "application/json",
-                                        "Authorization": `Token ${token}`,
+                                        Authorization: `Token ${token}`,
                                     },
                                     body: JSON.stringify({ role: "provider" }),
                                 });
@@ -383,11 +388,11 @@ export default function CustomerDashboardPage() {
                                     router.push("/providerOnboarding");
                                 } else {
                                     console.error("Failed to switch role");
-                                    router.push("/providerDashboard");
+                                    router.push("/customerDashboard");
                                 }
                             } catch (err) {
                                 console.error("Switch error:", err);
-                                router.push("/providerDashboard");
+                                router.push("/customerDashboard");
                             }
                         }}
                         className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-emerald-600 bg-emerald-50/50 hover:bg-emerald-50 font-bold transition-all group"

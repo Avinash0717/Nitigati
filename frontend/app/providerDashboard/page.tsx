@@ -66,7 +66,7 @@ export interface ServiceDetail {
     description: string;
     tags: string[];
     images: string[];
-    credentials?: { name: string, url: string }[];
+    credentials?: { name: string; url: string }[];
     verification_status: string;
     price_range: string;
     provider_id: string;
@@ -122,15 +122,12 @@ export default function ProviderDashboardPage() {
 
         setServicesLoading(true);
         try {
-            const response = await fetch(
-                "/api/providers/providerDashboard/services",
-                {
-                    method: "GET",
-                    headers: {
-                        Authorization: `Token ${token}`,
-                    },
+            const response = await fetch("/api/services", {
+                method: "GET",
+                headers: {
+                    Authorization: `Token ${token}`,
                 },
-            );
+            });
             if (!response.ok) throw new Error("Failed to fetch services");
             const result = await response.json();
             console.log(result);
@@ -160,15 +157,12 @@ export default function ProviderDashboardPage() {
 
         setServicesLoading(true);
         try {
-            const response = await fetch(
-                `/api/providers/providerDashboard/services?id=${id}`,
-                {
-                    method: "GET",
-                    headers: {
-                        Authorization: `Token ${token}`,
-                    },
+            const response = await fetch(`/api/services?id=${id}`, {
+                method: "GET",
+                headers: {
+                    Authorization: `Token ${token}`,
                 },
-            );
+            });
             if (!response.ok)
                 throw new Error("Failed to fetch service details");
             const result = await response.json();
@@ -186,7 +180,7 @@ export default function ProviderDashboardPage() {
                 price_range: result.price_range,
                 provider_id: result.provider_id,
                 location: result.location || "Location not specified",
-                created_at: result.created_at
+                created_at: result.created_at,
             };
 
             setSelectedService(mappedService);
@@ -292,12 +286,13 @@ export default function ProviderDashboardPage() {
                                     setActiveView(item.id as ViewType);
                                 }
                             }}
-                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${activeView === item.id ||
+                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${
+                                activeView === item.id ||
                                 (item.id === "services" &&
                                     activeView === "service detail")
-                                ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
-                                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
-                                }`}
+                                    ? "bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20"
+                                    : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-bold"
+                            }`}
                         >
                             <item.icon
                                 size={22}
@@ -327,21 +322,24 @@ export default function ProviderDashboardPage() {
                                     method: "POST",
                                     headers: {
                                         "Content-Type": "application/json",
-                                        "Authorization": `Token ${token}`,
+                                        Authorization: `Token ${token}`,
                                     },
                                     body: JSON.stringify({ role: "customer" }),
                                 });
                                 if (res.ok) {
                                     router.push("/customerDashboard");
+                                } else if (res.status === 403) {
+                                    // Provider profile doesn't exist, go to onboarding
+                                    router.push("/customerOnboarding");
                                 } else {
                                     console.error("Failed to switch role");
-                                    // Fallback redirect anyway if backend fails but we want to allow movement? 
+                                    // Fallback redirect anyway if backend fails but we want to allow movement?
                                     // Actually, better to just push if we are sure.
-                                    router.push("/customerDashboard");
+                                    router.push("/providerDashboard");
                                 }
                             } catch (err) {
                                 console.error("Switch error:", err);
-                                router.push("/customerDashboard");
+                                router.push("/providerDashboard");
                             }
                         }}
                         className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-emerald-600 bg-emerald-50/50 hover:bg-emerald-50 font-bold transition-all group"

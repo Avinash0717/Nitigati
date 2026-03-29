@@ -88,10 +88,18 @@ def provider_upload_images(request):
 
 
 @api_view(['GET'])
+@authentication_classes([SessionAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def logout(request):
     """
     pass
     """
+    # delete the token to force re-authentication
+    try:
+        request.user.auth_token.delete()  # type: ignore
+    except (AttributeError, Token.DoesNotExist):
+        pass
+    
     return Response({}, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -408,13 +416,15 @@ def switch_role(request):
         )
     
     if role == 'customer' and not hasattr(request.user, 'customer_profile'):
-         return Response(
+        
+        return Response(
             {"detail": "Customer profile does not exist."},
             status=status.HTTP_403_FORBIDDEN
         )
 
     # Update preference
     pref, _ = UserPreference.objects.get_or_create(user=request.user)
+    print(pref)
     pref.last_active_role = role
     pref.save()
 
@@ -553,6 +563,7 @@ def service_detail(request, uuid):
     
     try:
         pref = UserPreference.objects.get(user=user)
+        print(f"UserPreference found: last_active_role={pref.last_active_role}")
         role = pref.last_active_role
     except UserPreference.DoesNotExist:
         # Fallback: provider if profile exists, else customer
@@ -562,12 +573,14 @@ def service_detail(request, uuid):
             role = 'customer'
 
     # 2. Access Control
-    queryset = Service.objects.select_related('provider').prefetch_related('tags', 'media', 'credentials')
-
+    queryset = Service.objects.prefetch_related('tags', 'media', 'credentials')
+    print("++++++++++++++++++++++++++++++++++++++++++++++++++", queryset)
     if role == 'customer':
+        print("CUSTOMERRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
         # Unrestricted access to any service by uuid
         service = get_object_or_404(queryset, uuid=uuid)
     else:
+        print("PROVIDERRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
         # Provider role
         try:
             provider = user.provider_profile

@@ -80,7 +80,7 @@ class Service(models.Model):
         ('remote', 'Remote'),
         ('visit', 'Visit')
     ]
-
+        
     uuid = models.UUIDField(default=uuid4, editable=False, unique=True, primary_key=True)
     provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name='services')
     title = models.CharField(max_length=255)

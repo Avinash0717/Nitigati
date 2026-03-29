@@ -23,6 +23,7 @@ from .views import serve_file
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
+    path('api/chat/', include('chat.urls')),
 
     # Static media serve routes
     path('media/services/media/<path:filepath>', serve_file, {'prefix': 'services/media'}),

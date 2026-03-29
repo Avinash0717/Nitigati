@@ -10,7 +10,6 @@ https://docs.djangoproject.com/en/6.0/howto/deployment/asgi/
 import os
 
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import OriginValidator
 from django.core.asgi import get_asgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
@@ -18,12 +17,16 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 # Initialize Django before importing anything that uses models
 django_asgi_app = get_asgi_application()
 
-from api.routing import websocket_urlpatterns  # noqa: E402
+import api.routing
+import chat.routing
+from channels.auth import AuthMiddlewareStack
 
 application = ProtocolTypeRouter({
     'http': django_asgi_app,
-    'websocket': OriginValidator(
-        URLRouter(websocket_urlpatterns),
-        ['*'],  # Allow all origins in dev
+    'websocket': AuthMiddlewareStack(
+        URLRouter(
+            api.routing.websocket_urlpatterns + 
+            chat.routing.websocket_urlpatterns
+        )
     ),
 })
