@@ -143,6 +143,7 @@ export default function CustomerDashboardPage() {
     // Messaging State
     const [selectedRoom, setSelectedRoom] = useState<CustomerMessage | null>(null);
     const [chatView, setChatView] = useState<ChatViewType>("lobby");
+    const [msgBackView, setMsgBackView] = useState<ViewType | "lobby" | null>(null);
 
     // Redirect if not logged in
     useEffect(() => {
@@ -187,6 +188,9 @@ export default function CustomerDashboardPage() {
     // Fetch View-Specific Data
     const handleViewChange = async (view: ViewType) => {
         setActiveView(view);
+        if (view === "messages") {
+            setMsgBackView("lobby");
+        }
         if (!sessionManager.isLoggedIn) return;
         const token = sessionManager.getToken();
 
@@ -262,6 +266,7 @@ export default function CustomerDashboardPage() {
 
             setSelectedService(mappedService);
             setActiveView("service Detail");
+            setMsgBackView(null); // Reset when navigating to Detail
         } catch (err) {
             console.error("Error fetching service detail:", err);
             setError("Failed to load service details.");
@@ -289,6 +294,7 @@ export default function CustomerDashboardPage() {
                 setSelectedRoom(room);
                 setChatView("room");
                 setActiveView("messages");
+                setMsgBackView("service Detail");
             } else {
                 console.error("Failed to initiate chat");
             }
@@ -347,7 +353,13 @@ export default function CustomerDashboardPage() {
                         messages={messages} 
                         view={chatView}
                         selectedRoom={selectedRoom}
-                        onBackToLobby={() => setChatView("lobby")}
+                        onBackToLobby={() => {
+                            if (msgBackView === "service Detail") {
+                                setActiveView("service Detail");
+                            } else {
+                                setChatView("lobby");
+                            }
+                        }}
                         onSelectRoom={(room) => {
                             setSelectedRoom(room);
                             setChatView("room");
@@ -541,17 +553,19 @@ export default function CustomerDashboardPage() {
                     </div>
                 </header>
 
-                <div className="p-10 max-w-7xl mx-auto w-full">
-                    <div className="mb-12">
-                        <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-2">
-                            <span>Nitigati Client</span>
-                            <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
-                            <span>{activeView}</span>
+                <div className={`mx-auto w-full ${activeView === "messages" && chatView === "room" ? "p-0 h-[calc(100vh-6rem)] overflow-hidden" : "p-10 max-w-7xl"}`}>
+                    {(activeView !== "messages" || chatView !== "room") && (
+                        <div className="mb-12">
+                            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-2">
+                                <span>Nitigati Client</span>
+                                <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
+                                <span>{activeView}</span>
+                            </div>
+                            <h2 className="text-4xl font-black text-zinc-900 tracking-tight capitalize">
+                                {activeView}
+                            </h2>
                         </div>
-                        <h2 className="text-4xl font-black text-zinc-900 tracking-tight capitalize">
-                            {activeView}
-                        </h2>
-                    </div>
+                    )}
 
                     {renderContent()}
                 </div>
