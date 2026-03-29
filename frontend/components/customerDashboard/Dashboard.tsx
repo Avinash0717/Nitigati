@@ -16,9 +16,10 @@ import { CustomerDashboardData } from "@/app/customerDashboard/page";
 
 interface DashboardProps {
     data: CustomerDashboardData;
+    onMessageProvider: () => void;
 }
 
-export default function Dashboard({ data }: DashboardProps) {
+export default function Dashboard({ data, onMessageProvider }: DashboardProps) {
     return (
         <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Welcome Section */}
@@ -36,7 +37,10 @@ export default function Dashboard({ data }: DashboardProps) {
                         <Compass className="w-5 h-5" />
                         <span>Browse Services</span>
                     </button>
-                    <button className="h-14 bg-white border border-zinc-100 hover:bg-zinc-50 text-zinc-900 px-8 rounded-2xl flex items-center gap-3 font-black text-sm transition-all active:scale-95 shadow-sm">
+                    <button 
+                        onClick={onMessageProvider}
+                        className="h-14 bg-white border border-zinc-100 hover:bg-zinc-50 text-zinc-900 px-8 rounded-2xl flex items-center gap-3 font-black text-sm transition-all active:scale-95 shadow-sm"
+                    >
                         <MessageSquare className="w-5 h-5 text-zinc-400" />
                         <span>Message Provider</span>
                     </button>

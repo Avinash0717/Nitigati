@@ -19,9 +19,10 @@ import { ServiceDetail } from "@/app/providerDashboard/page";
 interface ProviderServicePageProps {
     service: ServiceDetail;
     onBack: () => void;
+    onMessageProvider: (providerId: string) => void;
 }
 
-export default function ProviderServicePage({ service, onBack }: ProviderServicePageProps) {
+export default function ProviderServicePage({ service, onBack, onMessageProvider }: ProviderServicePageProps) {
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Back Button */}
@@ -179,7 +180,10 @@ export default function ProviderServicePage({ service, onBack }: ProviderService
                         </div>
 
                         <div className="space-y-4">
-                            <button className="w-full h-16 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl flex items-center justify-center gap-3 font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95">
+                            <button 
+                                onClick={() => onMessageProvider(service.provider_id)}
+                                className="w-full h-16 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl flex items-center justify-center gap-3 font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                            >
                                 <MessageSquare size={20} />
                                 Message Provider
                             </button>

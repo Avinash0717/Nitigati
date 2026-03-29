@@ -71,10 +71,23 @@ export interface CustomerTransaction {
 
 export interface CustomerMessage {
     id: string;
-    sender_name: string;
-    last_message: string;
-    time: string;
+    name: string; // Room name
+    participants_usernames: string[];
+    last_message?: {
+        content: string;
+        timestamp: string;
+        sender: string;
+    };
     unread_count: number;
+    created_at: string;
+}
+
+export interface ChatMessage {
+    id: string;
+    room: string;
+    sender_username: string;
+    content: string;
+    timestamp: string;
 }
 
 export interface DiscoverService {
@@ -104,7 +117,9 @@ type ViewType =
     | "transactions"
     | "messages"
     | "discover services"
-    | "service_detail";
+    | "service Detail";
+
+export type ChatViewType = "lobby" | "room";
 
 export default function CustomerDashboardPage() {
     const router = useRouter();
@@ -124,6 +139,10 @@ export default function CustomerDashboardPage() {
     const [selectedService, setSelectedService] =
         useState<ServiceDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
+
+    // Messaging State
+    const [selectedRoom, setSelectedRoom] = useState<CustomerMessage | null>(null);
+    const [chatView, setChatView] = useState<ChatViewType>("lobby");
 
     // Redirect if not logged in
     useEffect(() => {
@@ -242,12 +261,39 @@ export default function CustomerDashboardPage() {
             };
 
             setSelectedService(mappedService);
-            setActiveView("service_detail");
+            setActiveView("service Detail");
         } catch (err) {
             console.error("Error fetching service detail:", err);
             setError("Failed to load service details.");
         } finally {
             setDetailLoading(false);
+        }
+    };
+
+    const handleInitiateChat = async (providerId: string) => {
+        if (!sessionManager.isLoggedIn) return;
+        const token = sessionManager.getToken();
+        
+        try {
+            const res = await fetch("/api/customer/customerDashboard/messages", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${token}`,
+                },
+                body: JSON.stringify({ provider_id: providerId }),
+            });
+            
+            if (res.ok) {
+                const room = await res.json();
+                setSelectedRoom(room);
+                setChatView("room");
+                setActiveView("messages");
+            } else {
+                console.error("Failed to initiate chat");
+            }
+        } catch (err) {
+            console.error("Initiate chat error:", err);
         }
     };
 
@@ -286,14 +332,31 @@ export default function CustomerDashboardPage() {
         switch (activeView) {
             case "dashboard":
                 return dashboardData ? (
-                    <Dashboard data={dashboardData} />
+                    <Dashboard 
+                        data={dashboardData} 
+                        onMessageProvider={() => setActiveView("messages")}
+                    />
                 ) : null;
             case "orders":
                 return <CustomerOrders orders={orders} />;
             case "transactions":
                 return <CustomerTransactions transactions={transactions} />;
             case "messages":
-                return <CustomerMessages messages={messages} />;
+                return (
+                    <CustomerMessages 
+                        messages={messages} 
+                        view={chatView}
+                        selectedRoom={selectedRoom}
+                        onBackToLobby={() => setChatView("lobby")}
+                        onSelectRoom={(room) => {
+                            setSelectedRoom(room);
+                            setChatView("room");
+                        }}
+                        userName={dashboardData?.user_name || ""}
+                        token={sessionManager.getToken() || ""}
+                        onExploreServices={() => handleViewChange("discover services")}
+                    />
+                );
             case "discover services":
                 return (
                     <CustomerDiscoverServices
@@ -301,11 +364,12 @@ export default function CustomerDashboardPage() {
                         onServiceClick={fetchServiceDetail}
                     />
                 );
-            case "service_detail":
+            case "service Detail":
                 return selectedService ? (
                     <ProviderServicePage
                         service={selectedService}
                         onBack={() => setActiveView("discover services")}
+                        onMessageProvider={handleInitiateChat}
                     />
                 ) : null;
             default:
