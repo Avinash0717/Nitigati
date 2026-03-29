@@ -7,6 +7,7 @@ export async function GET(request: Request) {
     try {
         const response = await fetch(backendUrl, {
             method: "GET",
+            cache: "no-store",
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": token || "",

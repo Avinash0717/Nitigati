@@ -45,12 +45,24 @@ const S = {
     mic_processing: "Processing… (tap to cancel)",
     mic_complete: "Profile complete!",
     mic_continue: "Tap to continue",
+    mic_source_label: "Input Microphone",
+    mic_source_default: "System default",
+    mic_source_refresh: "Refresh",
+    mic_source_none: "No microphone devices found",
+    mic_no_signal:
+        "No clear voice detected. Try another microphone from the list.",
+    mic_audio_blocked:
+        "Audio playback is blocked by the browser. Tap the mic again.",
     transcript_ph: "Speak now — I'm listening…",
     re_extract: "Re-extract from transcript",
     re_extracting: "Re-extracting…",
     ai_label: "AI Assistant",
     ai_greeting:
         "Hello! Tell me your name, what you do, your skills, and where you're based. Any language is fine.",
+    ai_audio_only_hint:
+        "Connected. Start speaking to begin onboarding. Tap again to send your turn.",
+    ai_no_input_hint:
+        "I could not hear a clear voice. Try another microphone and speak a bit closer.",
     ai_complete:
         "Got everything! Review below, correct anything wrong, then complete setup.",
     ai_updated: "Fields updated from transcript.",
@@ -68,13 +80,11 @@ const S = {
     f_email: "Email",
     f_phone: "Phone",
     f_location: "Location",
-    f_skills: "Skills (comma-separated)",
     f_password: "Password",
     ph_name: "Your full name",
     ph_email: "you@example.com",
     ph_phone: "+1 555 000 0000",
     ph_location: "City, Country",
-    ph_skills: "React, Design, Python…",
     ph_password: "Create a secure password",
     ph_photo: "Upload Photo",
     ph_front: "Front",
@@ -88,6 +98,270 @@ const S = {
     err_key: "NEXT_PUBLIC_GEMINI_API_KEY is not set.",
     err_gemini: "Gemini connection failed — check console.",
 };
+
+const ONBOARDING_DEBUG = process.env.NEXT_PUBLIC_ONBOARDING_DEBUG !== "0";
+const LOG_SCOPE = "[AI_ONBOARDING]";
+let logSequence = 0;
+
+function debugLog(event: string, details?: Record<string, unknown>) {
+    if (!ONBOARDING_DEBUG) return;
+    logSequence += 1;
+    const prefix = `${LOG_SCOPE}#${logSequence} ${new Date().toISOString()} ${event}`;
+    if (details) {
+        console.info(prefix, details);
+        return;
+    }
+    console.info(prefix);
+}
+
+function debugWarn(event: string, details?: Record<string, unknown>) {
+    if (!ONBOARDING_DEBUG) return;
+    logSequence += 1;
+    const prefix = `${LOG_SCOPE}#${logSequence} ${new Date().toISOString()} ${event}`;
+    if (details) {
+        console.warn(prefix, details);
+        return;
+    }
+    console.warn(prefix);
+}
+
+function summarizeText(text: string, max = 140): string {
+    if (text.length <= max) return text;
+    return `${text.slice(0, max)}...`;
+}
+
+const TARGET_INPUT_SAMPLE_RATE = 16000;
+const DEFAULT_OUTPUT_SAMPLE_RATE = 24000;
+const TARGET_INPUT_PEAK = 12000;
+const MAX_INPUT_GAIN = 4;
+
+const parsedOutputGain = Number(
+    process.env.NEXT_PUBLIC_GEMINI_OUTPUT_GAIN || "1.6",
+);
+const OUTPUT_AUDIO_GAIN = Number.isFinite(parsedOutputGain)
+    ? Math.max(0.5, Math.min(3, parsedOutputGain))
+    : 1.6;
+
+function toInt16Pcm(input: Float32Array): Int16Array {
+    const out = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        out[i] = s < 0 ? Math.round(s * 32768) : Math.round(s * 32767);
+    }
+    return out;
+}
+
+function downsampleToTargetRate(
+    input: Float32Array,
+    sourceRate: number,
+    targetRate: number,
+): Int16Array {
+    if (sourceRate <= targetRate) {
+        return toInt16Pcm(input);
+    }
+
+    const ratio = sourceRate / targetRate;
+    const outputLength = Math.max(1, Math.round(input.length / ratio));
+    const output = new Int16Array(outputLength);
+    let inOffset = 0;
+
+    for (let outIndex = 0; outIndex < outputLength; outIndex++) {
+        const nextInOffset = Math.min(
+            input.length,
+            Math.round((outIndex + 1) * ratio),
+        );
+        let sum = 0;
+        let count = 0;
+        for (let i = inOffset; i < nextInOffset; i++) {
+            sum += input[i];
+            count += 1;
+        }
+        const avg = count > 0 ? sum / count : 0;
+        const clamped = Math.max(-1, Math.min(1, avg));
+        output[outIndex] =
+            clamped < 0
+                ? Math.round(clamped * 32768)
+                : Math.round(clamped * 32767);
+        inOffset = nextInOffset;
+    }
+
+    return output;
+}
+
+function pcm16ToBase64(samples: Int16Array): string {
+    const bytes = new Uint8Array(samples.buffer);
+    let bin = "";
+    bytes.forEach((b) => {
+        bin += String.fromCharCode(b);
+    });
+    return btoa(bin);
+}
+
+function normalizeInputPcm(samples: Int16Array): Int16Array {
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+        const abs = Math.abs(samples[i]);
+        if (abs > peak) peak = abs;
+    }
+
+    if (!peak) {
+        return samples;
+    }
+
+    const desiredGain = TARGET_INPUT_PEAK / peak;
+    const gain = Math.max(1, Math.min(MAX_INPUT_GAIN, desiredGain));
+    if (gain <= 1.05) {
+        return samples;
+    }
+
+    const out = new Int16Array(samples.length);
+    for (let i = 0; i < samples.length; i++) {
+        const boosted = Math.round(samples[i] * gain);
+        out[i] = Math.max(-32768, Math.min(32767, boosted));
+    }
+
+    return out;
+}
+
+function parseSampleRateFromMimeType(mimeType?: string): number {
+    if (!mimeType) {
+        return DEFAULT_OUTPUT_SAMPLE_RATE;
+    }
+
+    const m = mimeType.match(/(?:rate|sample_rate)\s*=\s*(\d{4,6})/i);
+    const parsed = m ? Number(m[1]) : NaN;
+    if (!Number.isFinite(parsed)) {
+        return DEFAULT_OUTPUT_SAMPLE_RATE;
+    }
+
+    return Math.max(8000, Math.min(96000, parsed));
+}
+
+function mergeStreamingText(current: string, incoming: string): string {
+    const base = current.trim();
+    const chunk = incoming.trim();
+    if (!base) return chunk;
+    if (!chunk) return base;
+    if (chunk.startsWith(base)) return chunk;
+    if (base.startsWith(chunk)) return base;
+
+    const maxOverlap = Math.min(base.length, chunk.length);
+    for (let overlap = maxOverlap; overlap > 0; overlap--) {
+        const left = base.slice(-overlap).toLowerCase();
+        const right = chunk.slice(0, overlap).toLowerCase();
+        if (left === right) {
+            return `${base}${chunk.slice(overlap)}`.replace(/\s+/g, " ").trim();
+        }
+    }
+
+    return `${base} ${chunk}`.replace(/\s+/g, " ").trim();
+}
+
+interface BrowserSpeechRecognitionResult {
+    isFinal: boolean;
+    0: {
+        transcript: string;
+    };
+}
+
+interface BrowserSpeechRecognitionEvent {
+    resultIndex: number;
+    results: ArrayLike<BrowserSpeechRecognitionResult>;
+}
+
+interface BrowserSpeechRecognition {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    maxAlternatives: number;
+    onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+    onerror: ((event: { error?: string; message?: string }) => void) | null;
+    onend: (() => void) | null;
+    start: () => void;
+    stop: () => void;
+    abort: () => void;
+}
+
+type BrowserSpeechRecognitionCtor = new () => BrowserSpeechRecognition;
+
+interface MicrophoneOption {
+    deviceId: string;
+    label: string;
+}
+
+function useMicrophoneDevices() {
+    const [microphones, setMicrophones] = useState<MicrophoneOption[]>([]);
+    const [selectedMicrophoneId, setSelectedMicrophoneId] = useState("");
+
+    const refreshMicrophones = useCallback(async () => {
+        if (
+            typeof navigator === "undefined" ||
+            !navigator.mediaDevices?.enumerateDevices
+        ) {
+            return;
+        }
+
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices
+                .filter((d) => d.kind === "audioinput")
+                .map((d, i) => ({
+                    deviceId: d.deviceId,
+                    label: d.label || `Microphone ${i + 1}`,
+                }));
+
+            setMicrophones(audioInputs);
+            setSelectedMicrophoneId((current) => {
+                if (audioInputs.some((d) => d.deviceId === current)) {
+                    return current;
+                }
+                return audioInputs[0]?.deviceId || "";
+            });
+
+            debugLog("microphone_devices_updated", {
+                count: audioInputs.length,
+            });
+        } catch (err) {
+            debugWarn("microphone_devices_failed", {
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }, []);
+
+    useEffect(() => {
+        const initTimer = setTimeout(() => {
+            void refreshMicrophones();
+        }, 0);
+
+        if (typeof navigator === "undefined" || !navigator.mediaDevices) {
+            return;
+        }
+
+        const onDeviceChange = () => {
+            void refreshMicrophones();
+        };
+
+        navigator.mediaDevices.addEventListener?.(
+            "devicechange",
+            onDeviceChange,
+        );
+
+        return () => {
+            clearTimeout(initTimer);
+            navigator.mediaDevices.removeEventListener?.(
+                "devicechange",
+                onDeviceChange,
+            );
+        };
+    }, [refreshMicrophones]);
+
+    return {
+        microphones,
+        selectedMicrophoneId,
+        setSelectedMicrophoneId,
+        refreshMicrophones,
+    };
+}
 
 /* ── Types ────────────────────────────────────────────────────────────── */
 export interface AIOnboardingFormData {
@@ -129,11 +403,27 @@ class GeminiLiveSession {
     } | null = null;
     private readonly model = this.resolveModel();
     private connected = false;
+    private closingByClient = false;
+    private sentAudioChunks = 0;
+    private receivedAudioChunks = 0;
+    private inputTranscriptionChunks = 0;
+    private outputTranscriptionChunks = 0;
+    private unhandledMessageCount = 0;
+    private readonly audioOnlyCompat =
+        process.env.NEXT_PUBLIC_GEMINI_AUDIO_ONLY_COMPAT !== "0" &&
+        /gemini-3\.1.*live/i.test(this.model);
 
     onText: (t: string) => void = () => {};
-    onAudio: (b64: string) => void = () => {};
+    onInputTranscription: (t: string, finished: boolean) => void = () => {};
+    onOutputTranscription: (t: string, finished: boolean) => void = () => {};
+    onAudio: (b64: string, sampleRate: number) => void = () => {};
     onTurnComplete: () => void = () => {};
     onError: (msg: string) => void = () => {};
+    onClose: (info: {
+        code: number;
+        reason: string;
+        triggeredByClient: boolean;
+    }) => void = () => {};
 
     constructor(private apiKey: string) {}
 
@@ -154,10 +444,21 @@ class GeminiLiveSession {
             );
         }
 
+        debugLog("model_resolved", {
+            requestedModel: requested,
+        });
+
         return requested;
     }
 
     async connect(): Promise<void> {
+        this.closingByClient = false;
+        debugLog("connect_start", {
+            model: this.model,
+            hasApiKey: Boolean(this.apiKey),
+            apiKeyLength: this.apiKey?.length ?? 0,
+            audioOnlyCompat: this.audioOnlyCompat,
+        });
         const ai = new GoogleGenAI({ apiKey: this.apiKey });
 
         let session: {
@@ -165,13 +466,22 @@ class GeminiLiveSession {
             sendClientContent: (params: unknown) => void;
             close: () => void;
         };
+        let connectTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
         try {
             session = (await Promise.race([
                 ai.live.connect({
                     model: this.model,
                     config: {
-                        responseModalities: [Modality.TEXT, Modality.AUDIO],
+                        responseModalities: this.audioOnlyCompat
+                            ? [Modality.AUDIO]
+                            : [Modality.TEXT, Modality.AUDIO],
+                        inputAudioTranscription: this.audioOnlyCompat
+                            ? {}
+                            : undefined,
+                        outputAudioTranscription: this.audioOnlyCompat
+                            ? {}
+                            : undefined,
                         speechConfig: {
                             voiceConfig: {
                                 prebuiltVoiceConfig: { voiceName: "Aoede" },
@@ -192,13 +502,38 @@ End your final message with the exact word EXTRACTION_DONE.`,
                     callbacks: {
                         onopen: () => {
                             this.connected = true;
+                            debugLog("live_socket_open", {
+                                model: this.model,
+                            });
                         },
                         onmessage: (msg: unknown) => {
                             const liveMsg = msg as {
                                 error?: { message?: string; code?: number };
                                 text?: string;
                                 data?: string;
-                                serverContent?: { turnComplete?: boolean };
+                                serverContent?: {
+                                    turnComplete?: boolean;
+                                    generationComplete?: boolean;
+                                    waitingForInput?: boolean;
+                                    interrupted?: boolean;
+                                    modelTurn?: {
+                                        parts?: Array<{
+                                            text?: string;
+                                            inlineData?: {
+                                                data?: string;
+                                                mimeType?: string;
+                                            };
+                                        }>;
+                                    };
+                                    inputTranscription?: {
+                                        text?: string;
+                                        finished?: boolean;
+                                    };
+                                    outputTranscription?: {
+                                        text?: string;
+                                        finished?: boolean;
+                                    };
+                                };
                             };
 
                             const err = liveMsg?.error;
@@ -206,26 +541,270 @@ End your final message with the exact word EXTRACTION_DONE.`,
                                 const message =
                                     err.message ||
                                     `Gemini setup failed${err.code ? ` (code ${err.code})` : ""}.`;
+                                debugWarn("live_message_error", {
+                                    code: err.code,
+                                    message,
+                                });
                                 this.onError(message);
                                 return;
                             }
 
+                            let handledPayload = false;
+
+                            const setupComplete = (
+                                liveMsg as {
+                                    setupComplete?: unknown;
+                                }
+                            )?.setupComplete;
+                            const usageMetadata = (
+                                liveMsg as {
+                                    usageMetadata?: unknown;
+                                }
+                            )?.usageMetadata;
+                            const toolCall = (
+                                liveMsg as {
+                                    toolCall?: unknown;
+                                }
+                            )?.toolCall;
+                            const toolCallCancellation = (
+                                liveMsg as {
+                                    toolCallCancellation?: unknown;
+                                }
+                            )?.toolCallCancellation;
+                            const sessionResumptionUpdate = (
+                                liveMsg as {
+                                    sessionResumptionUpdate?: unknown;
+                                }
+                            )?.sessionResumptionUpdate;
+                            const voiceActivity = (
+                                liveMsg as {
+                                    voiceActivity?: {
+                                        voiceActivityType?: string;
+                                    };
+                                }
+                            )?.voiceActivity;
+                            const voiceActivityDetectionSignal = (
+                                liveMsg as {
+                                    voiceActivityDetectionSignal?: {
+                                        vadSignalType?: string;
+                                    };
+                                }
+                            )?.voiceActivityDetectionSignal;
+                            const goAway = (
+                                liveMsg as {
+                                    goAway?: {
+                                        timeLeft?: string;
+                                    };
+                                }
+                            )?.goAway;
+
                             if (
+                                setupComplete ||
+                                usageMetadata ||
+                                toolCall ||
+                                toolCallCancellation ||
+                                sessionResumptionUpdate ||
+                                voiceActivity ||
+                                voiceActivityDetectionSignal ||
+                                goAway
+                            ) {
+                                handledPayload = true;
+                            }
+
+                            if (voiceActivity?.voiceActivityType) {
+                                debugLog("live_voice_activity", {
+                                    type: voiceActivity.voiceActivityType,
+                                });
+                            }
+
+                            if (voiceActivityDetectionSignal?.vadSignalType) {
+                                debugLog("live_vad_signal", {
+                                    type: voiceActivityDetectionSignal.vadSignalType,
+                                });
+                            }
+
+                            if (goAway?.timeLeft) {
+                                debugWarn("live_go_away", {
+                                    timeLeft: goAway.timeLeft,
+                                });
+                            }
+
+                            const modelParts =
+                                liveMsg?.serverContent?.modelTurn?.parts;
+                            let partTextCount = 0;
+                            let partAudioCount = 0;
+
+                            if (
+                                Array.isArray(modelParts) &&
+                                modelParts.length
+                            ) {
+                                for (const part of modelParts) {
+                                    if (
+                                        typeof part?.text === "string" &&
+                                        part.text.trim()
+                                    ) {
+                                        partTextCount += 1;
+                                        handledPayload = true;
+                                        debugLog("live_model_text_part", {
+                                            textPreview: summarizeText(
+                                                part.text,
+                                            ),
+                                            length: part.text.length,
+                                        });
+                                        this.onText(part.text);
+                                    }
+
+                                    const partAudio = part?.inlineData?.data;
+                                    if (
+                                        typeof partAudio === "string" &&
+                                        partAudio
+                                    ) {
+                                        partAudioCount += 1;
+                                        handledPayload = true;
+                                        this.receivedAudioChunks += 1;
+                                        if (
+                                            this.receivedAudioChunks <= 5 ||
+                                            this.receivedAudioChunks % 25 === 0
+                                        ) {
+                                            debugLog("live_audio_received", {
+                                                chunkIndex:
+                                                    this.receivedAudioChunks,
+                                                base64Length: partAudio.length,
+                                                mimeType:
+                                                    part?.inlineData
+                                                        ?.mimeType ||
+                                                    "(unknown)",
+                                            });
+                                        }
+                                        this.onAudio(
+                                            partAudio,
+                                            parseSampleRateFromMimeType(
+                                                part?.inlineData?.mimeType,
+                                            ),
+                                        );
+                                    }
+                                }
+
+                                debugLog("live_model_turn_parts_received", {
+                                    partCount: modelParts.length,
+                                    textParts: partTextCount,
+                                    audioParts: partAudioCount,
+                                });
+                            }
+
+                            if (
+                                !partTextCount &&
                                 typeof liveMsg?.text === "string" &&
                                 liveMsg.text.trim()
                             ) {
+                                handledPayload = true;
+                                debugLog("live_text_received", {
+                                    textPreview: summarizeText(liveMsg.text),
+                                    length: liveMsg.text.length,
+                                });
                                 this.onText(liveMsg.text);
                             }
 
                             if (
+                                !partAudioCount &&
                                 typeof liveMsg?.data === "string" &&
                                 liveMsg.data
                             ) {
-                                this.onAudio(liveMsg.data);
+                                handledPayload = true;
+                                this.receivedAudioChunks += 1;
+                                if (
+                                    this.receivedAudioChunks <= 5 ||
+                                    this.receivedAudioChunks % 25 === 0
+                                ) {
+                                    debugLog("live_audio_received", {
+                                        chunkIndex: this.receivedAudioChunks,
+                                        base64Length: liveMsg.data.length,
+                                    });
+                                }
+                                this.onAudio(
+                                    liveMsg.data,
+                                    DEFAULT_OUTPUT_SAMPLE_RATE,
+                                );
+                            }
+
+                            const inputTx =
+                                liveMsg?.serverContent?.inputTranscription;
+                            if (
+                                typeof inputTx?.text === "string" &&
+                                inputTx.text.trim()
+                            ) {
+                                handledPayload = true;
+                                this.inputTranscriptionChunks += 1;
+                                debugLog("input_transcription_received", {
+                                    chunkIndex: this.inputTranscriptionChunks,
+                                    finished: Boolean(inputTx.finished),
+                                    textPreview: summarizeText(inputTx.text),
+                                });
+                                this.onInputTranscription(
+                                    inputTx.text,
+                                    Boolean(inputTx.finished),
+                                );
+                            }
+
+                            const outputTx =
+                                liveMsg?.serverContent?.outputTranscription;
+                            if (
+                                typeof outputTx?.text === "string" &&
+                                outputTx.text.trim()
+                            ) {
+                                handledPayload = true;
+                                this.outputTranscriptionChunks += 1;
+                                debugLog("output_transcription_received", {
+                                    chunkIndex: this.outputTranscriptionChunks,
+                                    finished: Boolean(outputTx.finished),
+                                    textPreview: summarizeText(outputTx.text),
+                                });
+                                this.onOutputTranscription(
+                                    outputTx.text,
+                                    Boolean(outputTx.finished),
+                                );
+                            }
+
+                            if (liveMsg?.serverContent?.generationComplete) {
+                                handledPayload = true;
+                                debugLog("live_generation_complete");
+                            }
+
+                            if (liveMsg?.serverContent?.waitingForInput) {
+                                handledPayload = true;
+                                debugLog("live_waiting_for_input");
+                            }
+
+                            if (liveMsg?.serverContent?.interrupted) {
+                                handledPayload = true;
+                                debugLog("live_generation_interrupted");
                             }
 
                             if (liveMsg?.serverContent?.turnComplete) {
+                                handledPayload = true;
+                                debugLog("live_turn_complete");
                                 this.onTurnComplete();
+                            }
+
+                            if (
+                                !handledPayload &&
+                                this.unhandledMessageCount < 5
+                            ) {
+                                this.unhandledMessageCount += 1;
+                                const topLevelKeys = Object.keys(liveMsg || {});
+                                const serverContentKeys = Object.keys(
+                                    liveMsg?.serverContent || {},
+                                );
+                                debugLog("live_message_unhandled_shape", {
+                                    topLevelKeys,
+                                    topLevelKeysCsv: topLevelKeys.join(","),
+                                    serverContentKeys,
+                                    serverContentKeysCsv:
+                                        serverContentKeys.join(","),
+                                    hasModelTurn: Boolean(
+                                        liveMsg?.serverContent?.modelTurn,
+                                    ),
+                                });
                             }
                         },
                         onerror: (e: ErrorEvent) => {
@@ -233,20 +812,40 @@ End your final message with the exact word EXTRACTION_DONE.`,
                                 e?.error?.message ||
                                 e?.message ||
                                 `${S.err_gemini} (SDK live error)`;
+                            debugWarn("live_socket_error", {
+                                message,
+                            });
                             this.onError(message);
                         },
                         onclose: (e: CloseEvent) => {
-                            if (!this.connected) {
+                            const triggeredByClient = this.closingByClient;
+                            debugWarn("live_socket_closed", {
+                                code: e.code,
+                                reason: e.reason || "(none)",
+                                wasConnected: this.connected,
+                                triggeredByClient,
+                            });
+                            this.onClose({
+                                code: e.code,
+                                reason: e.reason || "(none)",
+                                triggeredByClient,
+                            });
+                            if (!this.connected && !triggeredByClient) {
                                 this.onError(
                                     `Live session closed before ready. code=${e.code} reason=${e.reason || "(none)"}`,
                                 );
                             }
                             this.connected = false;
+                            this.closingByClient = false;
                         },
                     },
                 }),
                 new Promise<never>((_, reject) => {
-                    setTimeout(() => {
+                    connectTimeoutHandle = setTimeout(() => {
+                        debugWarn("connect_timeout", {
+                            model: this.model,
+                            timeoutMs: 30000,
+                        });
                         reject(
                             new Error(
                                 `Gemini setup timed out (30 s). model=${this.model}`,
@@ -257,30 +856,93 @@ End your final message with the exact word EXTRACTION_DONE.`,
             ])) as typeof session;
         } catch (err) {
             this.close();
+            debugWarn("connect_failed", {
+                model: this.model,
+                error: err instanceof Error ? err.message : String(err),
+            });
             throw err instanceof Error ? err : new Error(String(err));
+        } finally {
+            if (connectTimeoutHandle !== undefined) {
+                clearTimeout(connectTimeoutHandle);
+            }
         }
 
         this.session = session;
         this.connected = true;
+        debugLog("connect_ready", {
+            model: this.model,
+            audioOnlyCompat: this.audioOnlyCompat,
+        });
     }
 
-    sendAudio(b64: string) {
+    sendAudio(b64: string, sampleRate = TARGET_INPUT_SAMPLE_RATE) {
+        this.sentAudioChunks += 1;
+        if (this.sentAudioChunks <= 5 || this.sentAudioChunks % 25 === 0) {
+            debugLog("audio_chunk_sent", {
+                chunkIndex: this.sentAudioChunks,
+                base64Length: b64.length,
+                hasSession: Boolean(this.session),
+                sampleRate,
+            });
+        }
         this.session?.sendRealtimeInput({
             audio: {
-                mimeType: "audio/pcm;rate=16000",
+                mimeType: `audio/pcm;rate=${sampleRate}`,
                 data: b64,
             },
         });
     }
 
     sendText(text: string) {
+        debugLog("client_text_sent", {
+            textPreview: summarizeText(text),
+            length: text.length,
+            hasSession: Boolean(this.session),
+            audioOnlyCompat: this.audioOnlyCompat,
+        });
         this.session?.sendClientContent({
             turns: [{ role: "user", parts: [{ text }] }],
             turnComplete: true,
         });
     }
 
+    sendRealtimeText(text: string) {
+        debugLog("client_realtime_text_sent", {
+            textPreview: summarizeText(text),
+            length: text.length,
+            hasSession: Boolean(this.session),
+            audioOnlyCompat: this.audioOnlyCompat,
+        });
+        this.session?.sendRealtimeInput({
+            text,
+        });
+    }
+
+    endAudioStream() {
+        debugLog("audio_stream_end_sent", {
+            hasSession: Boolean(this.session),
+            audioOnlyCompat: this.audioOnlyCompat,
+        });
+        this.session?.sendRealtimeInput({
+            audioStreamEnd: true,
+        });
+        if (this.audioOnlyCompat) {
+            debugLog("audio_turn_complete_via_stream_end", {
+                hasSession: Boolean(this.session),
+            });
+        }
+    }
+
+    isAudioOnlyCompatMode() {
+        return this.audioOnlyCompat;
+    }
+
     close() {
+        this.closingByClient = true;
+        debugLog("session_close", {
+            wasConnected: this.connected,
+            hadSession: Boolean(this.session),
+        });
         this.connected = false;
         this.session?.close();
         this.session = null;
@@ -288,15 +950,27 @@ End your final message with the exact word EXTRACTION_DONE.`,
 }
 
 /* ── Audio pipeline hook ─────────────────────────────────────────────── */
-function useAudioPipeline(onChunk: (b64: string) => void) {
+function useAudioPipeline(
+    onChunk: (b64: string, sampleRate: number) => void,
+    selectedMicrophoneId: string,
+    onMicrophoneReady?: () => void,
+    onNoSignal?: () => void,
+) {
     const r = useRef({
         stream: null as MediaStream | null,
         ctx: null as AudioContext | null,
         proc: null as ScriptProcessorNode | null,
+        monitorGain: null as GainNode | null,
         raf: null as number | null,
         analyser: null as AnalyserNode | null,
+        sourceSampleRate: TARGET_INPUT_SAMPLE_RATE,
+        processedFrames: 0,
+        voicedFrames: 0,
         active: false,
-        audioEl: null as HTMLAudioElement | null,
+        ttsCtx: null as AudioContext | null,
+        ttsGain: null as GainNode | null,
+        ttsNextStartTime: 0,
+        ttsSources: new Set<AudioBufferSourceNode>(),
     });
 
     const [levels, setLevels] = useState<number[]>(new Array(9).fill(0));
@@ -308,6 +982,16 @@ function useAudioPipeline(onChunk: (b64: string) => void) {
     useEffect(() => {
         onChunkRef.current = onChunk;
     }, [onChunk]);
+
+    const onMicrophoneReadyRef = useRef(onMicrophoneReady);
+    useEffect(() => {
+        onMicrophoneReadyRef.current = onMicrophoneReady;
+    }, [onMicrophoneReady]);
+
+    const onNoSignalRef = useRef(onNoSignal);
+    useEffect(() => {
+        onNoSignalRef.current = onNoSignal;
+    }, [onNoSignal]);
 
     const tickRef = useRef<() => void>(() => {});
 
@@ -331,17 +1015,73 @@ function useAudioPipeline(onChunk: (b64: string) => void) {
     }, [tick]);
 
     const start = useCallback(async () => {
+        debugLog("mic_start_requested");
         let stream: MediaStream;
+
+        const supportedConstraints =
+            navigator.mediaDevices?.getSupportedConstraints?.() || {};
+        const audioConstraints: MediaTrackConstraints = {};
+
+        if (supportedConstraints.deviceId && selectedMicrophoneId) {
+            audioConstraints.deviceId = { exact: selectedMicrophoneId };
+        }
+        if (supportedConstraints.echoCancellation) {
+            audioConstraints.echoCancellation = true;
+        }
+        if (supportedConstraints.noiseSuppression) {
+            audioConstraints.noiseSuppression = true;
+        }
+        if (supportedConstraints.autoGainControl) {
+            audioConstraints.autoGainControl = true;
+        }
+        if (supportedConstraints.channelCount) {
+            audioConstraints.channelCount = 1;
+        }
         try {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch {
-            alert(S.err_mic);
-            return;
+            stream = await navigator.mediaDevices.getUserMedia({
+                audio:
+                    Object.keys(audioConstraints).length > 0
+                        ? audioConstraints
+                        : true,
+            });
+        } catch (err) {
+            // Fallback: if selected device cannot be opened, retry with default device.
+            if (selectedMicrophoneId) {
+                debugWarn("mic_selected_device_failed", {
+                    selectedMicrophoneId,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                    });
+                } catch {
+                    debugWarn("mic_start_failed_permission");
+                    alert(S.err_mic);
+                    return;
+                }
+            } else {
+                debugWarn("mic_start_failed_permission");
+                alert(S.err_mic);
+                return;
+            }
         }
 
         r.current.stream = stream;
-        const ctx = new AudioContext({ sampleRate: 16000 });
+        r.current.processedFrames = 0;
+        r.current.voicedFrames = 0;
+
+        const micTrack = stream.getAudioTracks()[0];
+        debugLog("mic_stream_selected", {
+            selectedMicrophoneId: selectedMicrophoneId || "(default)",
+            trackLabel: micTrack?.label || "(unlabeled)",
+        });
+
+        onMicrophoneReadyRef.current?.();
+
+        const ctx = new AudioContext();
         r.current.ctx = ctx;
+        r.current.sourceSampleRate = ctx.sampleRate;
         if (ctx.state === "suspended") await ctx.resume();
 
         const src = ctx.createMediaStreamSource(stream);
@@ -351,90 +1091,288 @@ function useAudioPipeline(onChunk: (b64: string) => void) {
         src.connect(analyser);
         r.current.analyser = analyser;
 
-        const proc = ctx.createScriptProcessor(4096, 1, 1);
+        const proc = ctx.createScriptProcessor(2048, 1, 1);
         proc.onaudioprocess = (e) => {
             if (!r.current.active) return;
             const f32 = e.inputBuffer.getChannelData(0);
-            const i16 = new Int16Array(f32.length);
-            for (let i = 0; i < f32.length; i++)
-                i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768));
-            const bytes = new Uint8Array(i16.buffer);
-            let bin = "";
-            bytes.forEach((b) => (bin += String.fromCharCode(b)));
-            onChunkRef.current(btoa(bin));
+
+            let sumSquares = 0;
+            for (let i = 0; i < f32.length; i++) {
+                const s = f32[i];
+                sumSquares += s * s;
+            }
+            const rms = Math.sqrt(sumSquares / f32.length);
+            r.current.processedFrames += 1;
+            if (rms > 0.008) {
+                r.current.voicedFrames += 1;
+            }
+
+            const i16 = downsampleToTargetRate(
+                f32,
+                r.current.sourceSampleRate,
+                TARGET_INPUT_SAMPLE_RATE,
+            );
+            const normalized = normalizeInputPcm(i16);
+            onChunkRef.current(
+                pcm16ToBase64(normalized),
+                TARGET_INPUT_SAMPLE_RATE,
+            );
         };
         src.connect(proc);
-        proc.connect(ctx.destination);
+        const monitorGain = ctx.createGain();
+        monitorGain.gain.value = 0;
+        proc.connect(monitorGain);
+        monitorGain.connect(ctx.destination);
         r.current.proc = proc;
+        r.current.monitorGain = monitorGain;
         r.current.active = true;
         setRecording(true);
+        debugLog("mic_started", {
+            contextSampleRate: ctx.sampleRate,
+            outputSampleRate: TARGET_INPUT_SAMPLE_RATE,
+            selectedMicrophoneId: selectedMicrophoneId || "(default)",
+        });
         tick();
-    }, [tick]);
+    }, [selectedMicrophoneId, tick]);
 
     const stop = useCallback(() => {
+        debugLog("mic_stop_requested", {
+            wasActive: r.current.active,
+        });
+
+        const detectedVoice = r.current.voicedFrames > 0;
+        debugLog("mic_capture_summary", {
+            frames: r.current.processedFrames,
+            voicedFrames: r.current.voicedFrames,
+            detectedVoice,
+            selectedMicrophoneId: selectedMicrophoneId || "(default)",
+        });
+        if (r.current.processedFrames > 0 && !detectedVoice) {
+            debugWarn("mic_no_signal_detected", {
+                selectedMicrophoneId: selectedMicrophoneId || "(default)",
+            });
+            onNoSignalRef.current?.();
+        }
+
         r.current.active = false;
         setRecording(false);
-        setLevels(new Array(9).fill(0));
+        setLevels((prev) =>
+            prev.every((value) => value === 0) ? prev : new Array(9).fill(0),
+        );
         if (r.current.raf) {
             cancelAnimationFrame(r.current.raf);
             r.current.raf = null;
         }
+        r.current.processedFrames = 0;
+        r.current.voicedFrames = 0;
         r.current.proc?.disconnect();
         r.current.proc = null;
+        r.current.monitorGain?.disconnect();
+        r.current.monitorGain = null;
         r.current.stream?.getTracks().forEach((t) => t.stop());
         r.current.stream = null;
         if (r.current.ctx?.state !== "closed") r.current.ctx?.close();
         r.current.ctx = null;
+        debugLog("mic_stopped");
+    }, [selectedMicrophoneId]);
+
+    const primePlayback = useCallback(async (): Promise<boolean> => {
+        if (!r.current.ttsCtx || r.current.ttsCtx.state === "closed") {
+            r.current.ttsCtx = new AudioContext();
+            r.current.ttsGain = null;
+            r.current.ttsNextStartTime = 0;
+        }
+
+        const ttsCtx = r.current.ttsCtx;
+        if (!ttsCtx) {
+            return false;
+        }
+
+        if (!r.current.ttsGain) {
+            const gainNode = ttsCtx.createGain();
+            gainNode.gain.value = OUTPUT_AUDIO_GAIN;
+            gainNode.connect(ttsCtx.destination);
+            r.current.ttsGain = gainNode;
+        }
+
+        if (ttsCtx.state !== "running") {
+            try {
+                await ttsCtx.resume();
+            } catch (err) {
+                debugWarn("tts_context_resume_failed", {
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            }
+        }
+
+        if (ttsCtx.state !== "running") {
+            return false;
+        }
+
+        try {
+            const silent = ttsCtx.createBufferSource();
+            silent.buffer = ttsCtx.createBuffer(1, 1, ttsCtx.sampleRate);
+            silent.connect(r.current.ttsGain || ttsCtx.destination);
+            silent.start();
+        } catch {
+            // Silent prime is best-effort only.
+        }
+
+        return true;
     }, []);
 
-    const playTTS = useCallback((b64pcm: string): Promise<void> => {
-        return new Promise((resolve) => {
-            if (!r.current.audioEl) r.current.audioEl = new Audio();
-            const audio = r.current.audioEl;
-            audio.pause();
+    const playTTS = useCallback(
+        (
+            b64pcm: string,
+            sampleRate = DEFAULT_OUTPUT_SAMPLE_RATE,
+        ): Promise<void> => {
+            return new Promise((resolve) => {
+                const execute = async () => {
+                    debugLog("tts_play_requested", {
+                        base64Length: b64pcm.length,
+                        sampleRate,
+                    });
 
-            // Wrap raw 24 kHz PCM in a WAV header so browsers can play it
-            const pcm = Uint8Array.from(atob(b64pcm), (c) => c.charCodeAt(0));
-            const hdr = new ArrayBuffer(44);
-            const v = new DataView(hdr);
-            const str = (o: number, s: string) =>
-                [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
-            const SR = 24000,
-                CH = 1,
-                BPS = 16;
-            str(0, "RIFF");
-            v.setUint32(4, 36 + pcm.byteLength, true);
-            str(8, "WAVE");
-            str(12, "fmt ");
-            v.setUint32(16, 16, true);
-            v.setUint16(20, 1, true);
-            v.setUint16(22, CH, true);
-            v.setUint32(24, SR, true);
-            v.setUint32(28, (SR * CH * BPS) / 8, true);
-            v.setUint16(32, (CH * BPS) / 8, true);
-            v.setUint16(34, BPS, true);
-            str(36, "data");
-            v.setUint32(40, pcm.byteLength, true);
-            audio.src = URL.createObjectURL(
-                new Blob([hdr, pcm], { type: "audio/wav" }),
-            );
+                    const playbackReady = await primePlayback();
+                    const ttsCtx = r.current.ttsCtx;
+                    if (!playbackReady || !ttsCtx) {
+                        debugWarn("tts_play_blocked", {
+                            playbackReady,
+                            contextState: ttsCtx?.state,
+                        });
+                        resolve();
+                        return;
+                    }
 
-            setSpeaking(true);
-            const done = () => {
-                setSpeaking(false);
-                resolve();
-            };
-            audio.onended = done;
-            audio.onerror = done;
-            audio.play().catch(done);
-        });
-    }, []);
+                    let pcm: Uint8Array;
+                    try {
+                        pcm = Uint8Array.from(atob(b64pcm), (c) =>
+                            c.charCodeAt(0),
+                        );
+                    } catch (err) {
+                        debugWarn("tts_base64_decode_failed", {
+                            error:
+                                err instanceof Error
+                                    ? err.message
+                                    : String(err),
+                        });
+                        resolve();
+                        return;
+                    }
+
+                    const sampleCount = Math.floor(pcm.byteLength / 2);
+                    if (!sampleCount) {
+                        resolve();
+                        return;
+                    }
+
+                    const f32 = new Float32Array(sampleCount);
+                    for (let i = 0; i < sampleCount; i++) {
+                        const lo = pcm[i * 2];
+                        const hi = pcm[i * 2 + 1];
+                        const value = (hi << 8) | lo;
+                        const signed = value >= 0x8000 ? value - 0x10000 : value;
+                        f32[i] = signed / 32768;
+                    }
+
+                    const resolvedSampleRate = Number.isFinite(sampleRate)
+                        ? Math.max(8000, Math.min(96000, sampleRate))
+                        : DEFAULT_OUTPUT_SAMPLE_RATE;
+                    const buffer = ttsCtx.createBuffer(
+                        1,
+                        sampleCount,
+                        resolvedSampleRate,
+                    );
+                    buffer.copyToChannel(f32, 0);
+
+                    const source = ttsCtx.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(r.current.ttsGain || ttsCtx.destination);
+
+                    const startAt = Math.max(
+                        r.current.ttsNextStartTime,
+                        ttsCtx.currentTime + 0.01,
+                    );
+                    r.current.ttsNextStartTime = startAt + buffer.duration;
+
+                    setSpeaking(true);
+                    r.current.ttsSources.add(source);
+
+                    const fallbackMs = Math.max(
+                        900,
+                        Math.round((buffer.duration + 0.4) * 1000),
+                    );
+                    const timeoutId = setTimeout(() => {
+                        if (!r.current.ttsSources.has(source)) {
+                            return;
+                        }
+                        r.current.ttsSources.delete(source);
+                        if (!r.current.ttsSources.size) {
+                            setSpeaking(false);
+                        }
+                        debugWarn("tts_play_timeout", {
+                            fallbackMs,
+                            contextState: ttsCtx.state,
+                        });
+                        resolve();
+                    }, fallbackMs);
+
+                    source.onended = () => {
+                        clearTimeout(timeoutId);
+                        r.current.ttsSources.delete(source);
+                        if (!r.current.ttsSources.size) {
+                            setSpeaking(false);
+                        }
+                        debugLog("tts_play_finished", {
+                            remainingSources: r.current.ttsSources.size,
+                        });
+                        resolve();
+                    };
+
+                    try {
+                        source.start(startAt);
+                    } catch (err) {
+                        clearTimeout(timeoutId);
+                        r.current.ttsSources.delete(source);
+                        if (!r.current.ttsSources.size) {
+                            setSpeaking(false);
+                        }
+                        debugWarn("tts_source_start_failed", {
+                            error:
+                                err instanceof Error
+                                    ? err.message
+                                    : String(err),
+                        });
+                        resolve();
+                    }
+                };
+
+                void execute();
+            });
+        },
+        [primePlayback],
+    );
 
     const stopTTS = useCallback(() => {
-        if (r.current.audioEl) {
-            r.current.audioEl.pause();
-            r.current.audioEl.currentTime = 0;
+        debugLog("tts_stop_requested", {
+            activeSources: r.current.ttsSources.size,
+        });
+
+        for (const source of r.current.ttsSources) {
+            try {
+                source.stop();
+            } catch {
+                // No-op: source may already be stopped.
+            }
         }
+        r.current.ttsSources.clear();
+        r.current.ttsNextStartTime = 0;
+
+        if (r.current.ttsCtx && r.current.ttsCtx.state !== "closed") {
+            void r.current.ttsCtx.close();
+        }
+        r.current.ttsCtx = null;
+        r.current.ttsGain = null;
         setSpeaking(false);
     }, []);
 
@@ -446,7 +1384,16 @@ function useAudioPipeline(onChunk: (b64: string) => void) {
         [stop, stopTTS],
     );
 
-    return { start, stop, playTTS, stopTTS, levels, recording, speaking };
+    return {
+        start,
+        stop,
+        playTTS,
+        stopTTS,
+        primePlayback,
+        levels,
+        recording,
+        speaking,
+    };
 }
 
 /* ── Voice session hook ──────────────────────────────────────────────── */
@@ -459,16 +1406,31 @@ interface SessionState {
 }
 
 function useVoiceSession(
-    playTTS: (b64: string) => Promise<void>,
+    playTTS: (b64: string, sampleRate: number) => Promise<void>,
     stopTTS: () => void,
     startMic: () => Promise<void>,
     stopMic: () => void,
 ) {
     const gem = useRef<GeminiLiveSession | null>(null);
     const phaseRef = useRef<Phase>("idle");
-    const queue = useRef<string[]>([]);
+    const queue = useRef<Array<{ b64: string; sampleRate: number }>>([]);
     const playing = useRef(false);
     const connecting = useRef(false);
+    const inboundAudioCount = useRef(0);
+    const closingExpected = useRef(false);
+    const transcriptRef = useRef("");
+    const browserSpeechRef = useRef<BrowserSpeechRecognition | null>(null);
+    const startBrowserSpeechFallbackRef = useRef<() => void>(() => {});
+    const noTranscriptFallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+    const hasGeminiInputText = useRef(false);
+    const browserSpeechChunks = useRef(0);
+    const transcriptCommittedRef = useRef("");
+    const transcriptInterimRef = useRef("");
+    const aiCommittedRef = useRef("");
+    const aiInterimRef = useRef("");
+    const hasOutputTranscriptionRef = useRef(false);
 
     const [st, setSt] = useState<SessionState>({
         phase: "idle",
@@ -478,8 +1440,19 @@ function useVoiceSession(
         missing: [],
     });
 
+    useEffect(() => {
+        transcriptRef.current = st.transcript;
+    }, [st.transcript]);
+
     const setPhase = useCallback((p: Phase) => {
+        const from = phaseRef.current;
         phaseRef.current = p;
+        if (from !== p) {
+            debugLog("phase_transition", {
+                from,
+                to: p,
+            });
+        }
         setSt((s) => ({ ...s, phase: p }));
     }, []);
 
@@ -507,24 +1480,214 @@ function useVoiceSession(
         return out;
     }, []);
 
+    const clearNoTranscriptFallbackTimer = useCallback(() => {
+        if (noTranscriptFallbackTimer.current) {
+            clearTimeout(noTranscriptFallbackTimer.current);
+            noTranscriptFallbackTimer.current = null;
+        }
+    }, []);
+
+    const stopBrowserSpeechFallback = useCallback(() => {
+        clearNoTranscriptFallbackTimer();
+        const recognition = browserSpeechRef.current;
+        browserSpeechRef.current = null;
+        if (!recognition) return;
+
+        try {
+            recognition.stop();
+        } catch {
+            try {
+                recognition.abort();
+            } catch {
+                // No-op: recognition may already be closed.
+            }
+        }
+
+        debugLog("browser_speech_fallback_stopped");
+    }, [clearNoTranscriptFallbackTimer]);
+
+    const startBrowserSpeechFallback = useCallback(() => {
+        if (typeof window === "undefined" || browserSpeechRef.current) {
+            return;
+        }
+
+        const speechWindow = window as Window & {
+            SpeechRecognition?: BrowserSpeechRecognitionCtor;
+            webkitSpeechRecognition?: BrowserSpeechRecognitionCtor;
+        };
+
+        const SpeechRecognitionCtor =
+            speechWindow.SpeechRecognition ||
+            speechWindow.webkitSpeechRecognition;
+
+        if (!SpeechRecognitionCtor) {
+            debugWarn("browser_speech_fallback_not_supported");
+            return;
+        }
+
+        try {
+            const recognition = new SpeechRecognitionCtor();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
+            recognition.lang = "en-US";
+
+            recognition.onresult = (event) => {
+                let finalChunk = "";
+                for (
+                    let i = event.resultIndex;
+                    i < event.results.length;
+                    i += 1
+                ) {
+                    const item = event.results[i];
+                    if (item?.isFinal) {
+                        finalChunk += item[0]?.transcript || "";
+                    }
+                }
+
+                const cleaned = finalChunk.trim();
+                if (!cleaned) return;
+
+                browserSpeechChunks.current += 1;
+                debugLog("browser_speech_fallback_chunk", {
+                    chunkIndex: browserSpeechChunks.current,
+                    textPreview: summarizeText(cleaned),
+                });
+
+                setSt((s) => {
+                    const mergedTranscript = mergeStreamingText(
+                        s.transcript,
+                        cleaned,
+                    );
+                    return {
+                        ...s,
+                        transcript: mergedTranscript,
+                        fields: extract(mergedTranscript),
+                    };
+                });
+            };
+
+            recognition.onerror = (event) => {
+                debugWarn("browser_speech_fallback_error", {
+                    error: event?.error || event?.message || "unknown",
+                });
+            };
+
+            recognition.onend = () => {
+                if (browserSpeechRef.current === recognition) {
+                    browserSpeechRef.current = null;
+                }
+                debugLog("browser_speech_fallback_ended");
+
+                if (phaseRef.current === "listening") {
+                    setTimeout(() => {
+                        if (
+                            phaseRef.current === "listening" &&
+                            !browserSpeechRef.current
+                        ) {
+                            startBrowserSpeechFallbackRef.current();
+                        }
+                    }, 250);
+                }
+            };
+
+            recognition.start();
+            browserSpeechRef.current = recognition;
+            debugLog("browser_speech_fallback_started");
+        } catch (err) {
+            debugWarn("browser_speech_fallback_start_failed", {
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }, [extract]);
+
+    useEffect(() => {
+        startBrowserSpeechFallbackRef.current = startBrowserSpeechFallback;
+    }, [startBrowserSpeechFallback]);
+
+    const armNoTranscriptFallbackTimer = useCallback(() => {
+        clearNoTranscriptFallbackTimer();
+        noTranscriptFallbackTimer.current = setTimeout(() => {
+            if (
+                phaseRef.current === "listening" &&
+                !hasGeminiInputText.current
+            ) {
+                debugWarn("input_transcription_fallback_triggered");
+                setSt((s) => ({
+                    ...s,
+                    aiMessage: S.ai_no_input_hint,
+                }));
+                startBrowserSpeechFallback();
+            }
+        }, 3500);
+    }, [clearNoTranscriptFallbackTimer, startBrowserSpeechFallback]);
+
+    const startListeningStack = useCallback(async () => {
+        hasGeminiInputText.current = false;
+        await startMic();
+        armNoTranscriptFallbackTimer();
+    }, [startMic, armNoTranscriptFallbackTimer]);
+
+    const stopListeningStack = useCallback(() => {
+        stopMic();
+        stopBrowserSpeechFallback();
+    }, [stopMic, stopBrowserSpeechFallback]);
+
     const drainAudio = useCallback(async () => {
-        if (playing.current) return;
+        if (playing.current) {
+            debugLog("audio_queue_drain_skipped", {
+                reason: "already_playing",
+                queueLength: queue.current.length,
+            });
+            return;
+        }
+        debugLog("audio_queue_drain_start", {
+            queueLength: queue.current.length,
+        });
         playing.current = true;
-        while (queue.current.length) await playTTS(queue.current.shift()!);
+        while (queue.current.length) {
+            let lastPlayback: Promise<void> | null = null;
+            while (queue.current.length) {
+                const nextChunk = queue.current.shift();
+                if (!nextChunk) continue;
+                lastPlayback = playTTS(
+                    nextChunk.b64,
+                    nextChunk.sampleRate,
+                );
+            }
+            if (lastPlayback) {
+                await lastPlayback;
+            }
+        }
         playing.current = false;
+        debugLog("audio_queue_drain_done", {
+            queueLength: queue.current.length,
+            phase: phaseRef.current,
+        });
         if (phaseRef.current === "greeting" || phaseRef.current === "asking") {
             setPhase("listening");
-            await startMic();
+            await startListeningStack();
         }
-    }, [playTTS, startMic, setPhase]);
+    }, [playTTS, setPhase, startListeningStack]);
 
     const connect = useCallback(async () => {
-        if (connecting.current || gem.current || phaseRef.current !== "idle")
+        if (connecting.current || gem.current || phaseRef.current !== "idle") {
+            debugLog("connect_ignored", {
+                connecting: connecting.current,
+                hasSession: Boolean(gem.current),
+                phase: phaseRef.current,
+            });
             return;
+        }
+        debugLog("connect_attempt", {
+            phase: phaseRef.current,
+        });
         connecting.current = true;
+        closingExpected.current = false;
 
         const key = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
         if (!key) {
+            debugWarn("connect_missing_api_key");
             alert(S.err_key);
             connecting.current = false;
             return;
@@ -534,45 +1697,196 @@ function useVoiceSession(
         try {
             session = new GeminiLiveSession(key);
         } catch (err) {
-            const message =
-                err instanceof Error ? err.message : String(err);
+            const message = err instanceof Error ? err.message : String(err);
+            debugWarn("connect_constructor_failed", {
+                message,
+            });
             alert(message);
             connecting.current = false;
             return;
         }
+        debugLog("connect_session_created");
         gem.current = session;
+
+        transcriptCommittedRef.current = "";
+        transcriptInterimRef.current = "";
+        aiCommittedRef.current = "";
+        aiInterimRef.current = "";
+        hasOutputTranscriptionRef.current = false;
 
         session.onText = (text) =>
             setSt((s) => {
-                const tr = s.transcript
-                    ? `${s.transcript} ${text.trim()}`
-                    : text.trim();
                 const msg = text.replace("EXTRACTION_DONE", "").trim();
                 const done = text.includes("EXTRACTION_DONE");
+                debugLog("on_text", {
+                    done,
+                    length: text.length,
+                    textPreview: summarizeText(text),
+                });
                 if (done) phaseRef.current = "complete";
+
+                if (!done && hasOutputTranscriptionRef.current) {
+                    return {
+                        ...s,
+                        fields: extract(s.transcript),
+                    };
+                }
+
                 return {
                     ...s,
                     phase: done ? "complete" : s.phase,
-                    transcript: tr,
-                    aiMessage: msg || (done ? S.ai_complete : s.aiMessage),
-                    fields: extract(tr),
+                    aiMessage: done
+                        ? S.ai_complete
+                        : msg
+                          ? mergeStreamingText(s.aiMessage, msg)
+                          : s.aiMessage,
+                    fields: extract(s.transcript),
                     missing: done ? [] : s.missing,
                 };
             });
 
-        session.onAudio = (b64) => {
-            queue.current.push(b64);
+        session.onInputTranscription = (text, finished) =>
+            setSt((s) => {
+                const chunk = text.trim();
+                if (!chunk) {
+                    return s;
+                }
+                hasGeminiInputText.current = true;
+                clearNoTranscriptFallbackTimer();
+
+                if (finished) {
+                    transcriptCommittedRef.current = mergeStreamingText(
+                        transcriptCommittedRef.current,
+                        chunk,
+                    );
+                    transcriptInterimRef.current = "";
+                } else {
+                    transcriptInterimRef.current = chunk;
+                }
+
+                const tr = [
+                    transcriptCommittedRef.current,
+                    transcriptInterimRef.current,
+                ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
+
+                debugLog("on_input_transcription", {
+                    length: chunk.length,
+                    finished,
+                    textPreview: summarizeText(chunk),
+                });
+                return {
+                    ...s,
+                    transcript: tr,
+                    fields: extract(tr),
+                };
+            });
+
+        session.onOutputTranscription = (text, finished) =>
+            setSt((s) => {
+                const chunk = text.trim();
+                if (!chunk) {
+                    return s;
+                }
+
+                hasOutputTranscriptionRef.current = true;
+
+                if (finished) {
+                    aiCommittedRef.current = mergeStreamingText(
+                        aiCommittedRef.current,
+                        chunk,
+                    );
+                    aiInterimRef.current = "";
+                } else {
+                    aiInterimRef.current = chunk;
+                }
+
+                const aiMessage = [aiCommittedRef.current, aiInterimRef.current]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
+
+                debugLog("on_output_transcription", {
+                    length: chunk.length,
+                    finished,
+                    textPreview: summarizeText(chunk),
+                });
+
+                return {
+                    ...s,
+                    aiMessage: aiMessage || s.aiMessage,
+                };
+            });
+
+        session.onAudio = (b64, sampleRate) => {
+            inboundAudioCount.current += 1;
+            if (
+                inboundAudioCount.current <= 5 ||
+                inboundAudioCount.current % 25 === 0
+            ) {
+                debugLog("on_audio", {
+                    chunkIndex: inboundAudioCount.current,
+                    base64Length: b64.length,
+                    sampleRate,
+                    queueLengthBeforePush: queue.current.length,
+                });
+            }
+            queue.current.push({ b64, sampleRate });
             drainAudio();
         };
         session.onError = (msg) => {
+            debugWarn("session_error", {
+                message: msg,
+            });
             alert(msg);
             setPhase("idle");
         };
+        session.onTurnComplete = () => {
+            debugLog("session_turn_complete", {
+                phase: phaseRef.current,
+                queueLength: queue.current.length,
+            });
+        };
+        session.onClose = ({ code, reason, triggeredByClient }) => {
+            debugWarn("session_onclose", {
+                code,
+                reason,
+                triggeredByClient,
+                phase: phaseRef.current,
+            });
+
+            if (triggeredByClient || closingExpected.current) {
+                return;
+            }
+
+            queue.current = [];
+            playing.current = false;
+            connecting.current = false;
+            gem.current = null;
+            stopTTS();
+            stopListeningStack();
+
+            if (
+                phaseRef.current !== "idle" &&
+                phaseRef.current !== "complete"
+            ) {
+                setPhase("idle");
+                alert(
+                    `Gemini live session closed unexpectedly (code ${code}). Reason: ${reason || "(none)"}.`,
+                );
+            }
+        };
 
         try {
+            debugLog("connect_awaiting_sdk_connect");
             await session.connect();
         } catch (err) {
             console.error("Gemini connection error:", err);
+            debugWarn("connect_failed", {
+                error: err instanceof Error ? err.message : String(err),
+            });
             alert(
                 `${S.err_gemini}\n${err instanceof Error ? err.message : err}`,
             );
@@ -582,40 +1896,98 @@ function useVoiceSession(
         }
 
         connecting.current = false;
+        if (session.isAudioOnlyCompatMode()) {
+            debugLog("connect_complete_audio_only_mode");
+            setPhase("listening");
+            setSt((s) => ({
+                ...s,
+                aiMessage: S.ai_audio_only_hint,
+            }));
+            await startListeningStack();
+            return;
+        }
+
+        debugLog("connect_complete_setting_greeting");
         setPhase("greeting");
         setSt((s) => ({ ...s, aiMessage: S.ai_greeting }));
+        debugLog("initial_prompt_sending");
         session.sendText(
             "Greet the user warmly and ask them to tell you about themselves. 2 sentences max.",
         );
-    }, [drainAudio, extract, setPhase]);
+    }, [
+        clearNoTranscriptFallbackTimer,
+        drainAudio,
+        extract,
+        setPhase,
+        startListeningStack,
+        stopListeningStack,
+        stopTTS,
+    ]);
 
     const disconnect = useCallback(() => {
+        debugLog("disconnect_requested", {
+            hadSession: Boolean(gem.current),
+        });
+        closingExpected.current = true;
+        stopListeningStack();
         gem.current?.close();
         gem.current = null;
         connecting.current = false;
-    }, []);
+    }, [stopListeningStack]);
 
     const stopAndAnalyze = useCallback(() => {
-        stopMic();
+        debugLog("stop_and_analyze_requested");
+        stopListeningStack();
         setPhase("asking");
+        if (gem.current?.isAudioOnlyCompatMode()) {
+            gem.current.endAudioStream();
+            const transcriptSnippet = summarizeText(transcriptRef.current, 280);
+            gem.current.sendRealtimeText(
+                transcriptRef.current.trim()
+                    ? `User finished speaking. Continue onboarding using the most recent audio context and transcript so far: "${transcriptSnippet}". Ask only for missing fields, or reply with EXTRACTION_DONE if complete.`
+                    : "User finished speaking. Continue onboarding using the latest audio input. If audio was unclear, politely ask the user to repeat key details (name, email, phone, location, gender, skills).",
+            );
+            debugLog("audio_compat_generation_trigger_sent", {
+                transcriptLength: transcriptRef.current.length,
+                hasTranscript: Boolean(transcriptRef.current.trim()),
+            });
+            return;
+        }
         gem.current?.sendText(
             "[User finished speaking. Ask for anything still missing, or say EXTRACTION_DONE if complete.]",
         );
-    }, [stopMic, setPhase]);
+    }, [setPhase, stopListeningStack]);
+
+    const startListening = useCallback(async () => {
+        await startListeningStack();
+    }, [startListeningStack]);
 
     const interrupt = useCallback(() => {
+        debugLog("interrupt_requested", {
+            queueLength: queue.current.length,
+            phase: phaseRef.current,
+        });
         stopTTS();
-        stopMic();
+        stopListeningStack();
         queue.current = [];
         playing.current = false;
         setPhase("listening");
-    }, [stopTTS, stopMic, setPhase]);
+    }, [setPhase, stopListeningStack, stopTTS]);
 
     const reset = useCallback(() => {
+        debugLog("reset_requested", {
+            phase: phaseRef.current,
+            queueLength: queue.current.length,
+        });
         stopTTS();
-        stopMic();
+        stopListeningStack();
         queue.current = [];
         playing.current = false;
+        transcriptCommittedRef.current = "";
+        transcriptInterimRef.current = "";
+        aiCommittedRef.current = "";
+        aiInterimRef.current = "";
+        hasOutputTranscriptionRef.current = false;
         disconnect();
         setSt({
             phase: "idle",
@@ -624,11 +1996,15 @@ function useVoiceSession(
             fields: {},
             missing: [],
         });
-    }, [stopTTS, stopMic, disconnect]);
+    }, [disconnect, stopListeningStack, stopTTS]);
 
     const reExtract = useCallback(
         (transcript: string) => {
             const fields = extract(transcript);
+            debugLog("reextract_requested", {
+                transcriptLength: transcript.length,
+                extractedKeys: Object.keys(fields),
+            });
             setSt((s) => ({
                 ...s,
                 fields: { ...s.fields, ...fields },
@@ -641,23 +2017,30 @@ function useVoiceSession(
     );
 
     const setTranscript = useCallback(
-        (t: string) => setSt((s) => ({ ...s, transcript: t })),
+        (t: string) => {
+            transcriptCommittedRef.current = t.trim();
+            transcriptInterimRef.current = "";
+            setSt((s) => ({ ...s, transcript: t }));
+        },
         [],
     );
 
     useEffect(
         () => () => {
             disconnect();
+            stopBrowserSpeechFallback();
         },
-        [disconnect],
+        [disconnect, stopBrowserSpeechFallback],
     );
 
     return {
         st,
         setTranscript,
         connect,
+        startListening,
         disconnect,
-        sendAudioChunk: (b64: string) => gem.current?.sendAudio(b64),
+        sendAudioChunk: (b64: string, sampleRate: number) =>
+            gem.current?.sendAudio(b64, sampleRate),
         stopAndAnalyze,
         interrupt,
         reset,
@@ -705,12 +2088,19 @@ export default function AI_Onboarding({
     const [email, setEmail] = useState(initialData?.email ?? "");
     const [phone, setPhone] = useState(initialData?.phoneNumber ?? "");
     const [location, setLocation] = useState(initialData?.location ?? "");
-    const [skills, setSkills] = useState("");
     const [reExtracting, setReExtracting] = useState(false);
 
     const profileFileRef = useRef<HTMLInputElement>(null);
     const frontFileRef = useRef<HTMLInputElement>(null);
     const backFileRef = useRef<HTMLInputElement>(null);
+    const [micWarning, setMicWarning] = useState("");
+
+    const {
+        microphones,
+        selectedMicrophoneId,
+        setSelectedMicrophoneId,
+        refreshMicrophones,
+    } = useMicrophoneDevices();
 
     const openPicker = useCallback((type: "profile" | "front" | "back") => {
         if (type === "profile") {
@@ -749,14 +2139,33 @@ export default function AI_Onboarding({
         legalIdBack,
     ]);
 
-    const sendRef = useRef<(b64: string) => void>(() => {});
-    const { start, stop, playTTS, stopTTS, levels, recording, speaking } =
-        useAudioPipeline(useCallback((b64) => sendRef.current(b64), []));
+    const sendRef = useRef<(b64: string, sampleRate: number) => void>(() => {});
+    const {
+        start,
+        stop,
+        playTTS,
+        stopTTS,
+        primePlayback,
+        levels,
+        recording,
+        speaking,
+    } = useAudioPipeline(
+        useCallback((b64, sampleRate) => sendRef.current(b64, sampleRate), []),
+        selectedMicrophoneId,
+        () => {
+            setMicWarning("");
+            void refreshMicrophones();
+        },
+        () => {
+            setMicWarning(S.mic_no_signal);
+        },
+    );
 
     const {
         st,
         setTranscript,
         connect,
+        startListening,
         sendAudioChunk,
         stopAndAnalyze,
         interrupt,
@@ -788,16 +2197,15 @@ export default function AI_Onboarding({
         typeof extractedFields.location === "string"
             ? extractedFields.location
             : "";
-    const extractedSkillsText = Array.isArray(extractedFields.skills)
-        ? (extractedFields.skills as string[]).join(", ")
-        : "";
+    const extractedSkills = Array.isArray(extractedFields.skills)
+        ? (extractedFields.skills as string[])
+        : [];
 
     const nameValue = name || extractedName;
     const genderValue = gender || extractedGender;
     const emailValue = email || extractedEmail;
     const phoneValue = phone || extractedPhone;
     const locationValue = location || extractedLocation;
-    const skillsValue = skills || extractedSkillsText;
 
     useEffect(() => {
         sendRef.current = sendAudioChunk ?? (() => {});
@@ -809,6 +2217,12 @@ export default function AI_Onboarding({
     ) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        debugLog("file_selected", {
+            type,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type,
+        });
         const reader = new FileReader();
         reader.onloadend = () =>
             setPreviews((p) => ({ ...p, [type]: reader.result as string }));
@@ -818,7 +2232,20 @@ export default function AI_Onboarding({
         if (type === "back") setLegalIdBack(file);
     };
 
-    const toggleMic = () => {
+    const toggleMic = async () => {
+        debugLog("mic_toggle_clicked", {
+            phase,
+            recording,
+            speaking,
+        });
+        setMicWarning("");
+
+        const playbackReady = await primePlayback();
+        if (!playbackReady) {
+            debugWarn("ui_playback_not_unlocked");
+            setMicWarning(S.mic_audio_blocked);
+        }
+
         if (phase === "idle") connect();
         else if (
             phase === "greeting" ||
@@ -827,21 +2254,31 @@ export default function AI_Onboarding({
         )
             interrupt();
         else if (recording) stopAndAnalyze();
-        else if (phase !== "complete") start();
+        else if (phase !== "complete") await startListening();
     };
 
     const handleReExtract = () => {
         if (!transcript.trim()) return;
+        debugLog("manual_reextract_clicked", {
+            transcriptLength: transcript.length,
+        });
         setReExtracting(true);
         reExtract(transcript);
         setReExtracting(false);
     };
 
     const handleSubmit = () => {
-        const skillArr = skillsValue
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
+        const skillArr = extractedSkills.map((s) => s.trim()).filter(Boolean);
+        debugLog("submit_clicked", {
+            phase,
+            transcriptLength: transcript.length,
+            extractedKeys: Object.keys(extractedFields),
+            skillCount: skillArr.length,
+            hasPassword: Boolean(password),
+            hasProfilePicture: Boolean(profilePicture),
+            hasLegalFront: Boolean(legalIdFront),
+            hasLegalBack: Boolean(legalIdBack),
+        });
         onSubmit({
             transcript,
             extractedFields: {
@@ -874,10 +2311,6 @@ export default function AI_Onboarding({
         [extractedFields],
     );
 
-    const extractedSkills = Array.isArray(extractedFields.skills)
-        ? (extractedFields.skills as string[])
-        : [];
-
     const phaseLabel = useMemo(() => {
         if (phase === "idle") return S.phase_idle;
         if (phase === "greeting")
@@ -899,6 +2332,17 @@ export default function AI_Onboarding({
         if (phase === "complete") return S.mic_complete;
         return S.mic_continue;
     }, [phase, speaking, recording]);
+
+    useEffect(() => {
+        debugLog("ui_state_snapshot", {
+            phase,
+            phaseLabel,
+            micLabel,
+            recording,
+            speaking,
+            transcriptLength: transcript.length,
+        });
+    }, [phase, phaseLabel, micLabel, recording, speaking, transcript]);
 
     const inp =
         "w-full bg-white border border-zinc-200 rounded-xl px-5 py-4 text-zinc-900 font-bold placeholder:text-zinc-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all";
@@ -1082,6 +2526,49 @@ export default function AI_Onboarding({
                         <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">
                             {phaseLabel}
                         </span>
+                    </div>
+
+                    <div className="w-full max-w-xl mb-6 text-left">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                                {S.mic_source_label}
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => void refreshMicrophones()}
+                                className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wide rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+                            >
+                                {S.mic_source_refresh}
+                            </button>
+                        </div>
+                        <select
+                            value={selectedMicrophoneId}
+                            onChange={(e) => {
+                                setMicWarning("");
+                                setSelectedMicrophoneId(e.target.value);
+                            }}
+                            disabled={recording}
+                            className="w-full bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm font-bold text-zinc-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 outline-none disabled:opacity-60"
+                        >
+                            {!selectedMicrophoneId && (
+                                <option value="">{S.mic_source_default}</option>
+                            )}
+                            {microphones.map((mic) => (
+                                <option key={mic.deviceId} value={mic.deviceId}>
+                                    {mic.label}
+                                </option>
+                            ))}
+                        </select>
+                        {microphones.length === 0 && (
+                            <p className="mt-2 text-xs font-bold text-amber-600">
+                                {S.mic_source_none}
+                            </p>
+                        )}
+                        {micWarning && (
+                            <p className="mt-2 text-xs font-bold text-amber-600">
+                                {micWarning}
+                            </p>
+                        )}
                     </div>
 
                     {/* AI message bubble */}
@@ -1310,22 +2797,6 @@ export default function AI_Onboarding({
                                             setLocation(e.target.value)
                                         }
                                         placeholder={S.ph_location}
-                                        dir="auto"
-                                        className={inp}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-black text-zinc-900 mb-2">
-                                        {S.f_skills}
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={skillsValue}
-                                        onChange={(e) =>
-                                            setSkills(e.target.value)
-                                        }
-                                        placeholder={S.ph_skills}
                                         dir="auto"
                                         className={inp}
                                     />

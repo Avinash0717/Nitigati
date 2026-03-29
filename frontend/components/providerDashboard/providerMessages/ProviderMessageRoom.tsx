@@ -103,8 +103,8 @@ interface ProviderMessageRoomProps {
 export default function ProviderMessageRoom({ room, onBack, userName, token }: ProviderMessageRoomProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
-    const [socket, setSocket] = useState<WebSocket | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const socketRef = useRef<WebSocket | null>(null);
 
     // ─── Accept Proposal → Create Order ───
     const handleAcceptOrder = async () => {
@@ -115,6 +115,7 @@ export default function ProviderMessageRoom({ room, onBack, userName, token }: P
             delivery_days: 5,
             revisions: 3,
             signature: `accepted-by-${userName}`,
+            room_name: room.name,
         };
         // ─── END: Sample order hardcoded data ───
 
@@ -175,8 +176,11 @@ export default function ProviderMessageRoom({ room, onBack, userName, token }: P
         };
         ws.onclose = () => console.log("WebSocket Disconnected");
 
-        setSocket(ws);
-        return () => ws.close();
+        socketRef.current = ws;
+        return () => {
+            socketRef.current = null;
+            ws.close();
+        };
     }, [room.name, token]);
 
     // Scroll to bottom
@@ -187,6 +191,7 @@ export default function ProviderMessageRoom({ room, onBack, userName, token }: P
     }, [messages]);
 
     const handleSend = () => {
+        const socket = socketRef.current;
         if (!input.trim() || !socket) return;
         socket.send(JSON.stringify({ message: input }));
         setInput("");
@@ -242,7 +247,7 @@ export default function ProviderMessageRoom({ room, onBack, userName, token }: P
 
                     {/* Order Status Notification */}
                     <div className="bg-sky-50/50 border border-sky-100/30 rounded-3xl p-6 text-center max-w-lg mx-auto shadow-sm">
-                        <p className="text-sky-900 font-bold text-sm leading-relaxed mb-1">New inquiry received for <span className="text-sky-600">"Custom Logo & Brand Identity"</span></p>
+                        <p className="text-sky-900 font-bold text-sm leading-relaxed mb-1">New inquiry received for <span className="text-sky-600">&quot;Custom Logo &amp; Brand Identity&quot;</span></p>
                         <p className="text-zinc-400 font-black text-[9px] uppercase tracking-widest italic">Awaiting your professional proposal</p>
                     </div>
 
