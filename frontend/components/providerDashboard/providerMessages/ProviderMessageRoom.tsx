@@ -17,6 +17,82 @@ import {
 } from "lucide-react";
 import { ProviderMessage, ChatMessage } from "@/app/providerDashboard/page";
 
+/* ────────────────────────────────────────────────────────────
+   Inline Proposal Card – renders inside chat as a customer message
+   ──────────────────────────────────────────────────────────── */
+function ProposalCard({ onAccept }: { onAccept: () => void }) {
+    // ─── START: Sample order hardcoded data ───
+    const proposal = {
+        title: "Proposal Received",
+        price: "$540.00 USD",
+        deliverables: ["Logo + Social Media Kit", "3 Revisions"],
+    };
+    // ─── END: Sample order hardcoded data ───
+
+    return (
+        <div className="flex items-end gap-3 flex-row">
+            {/* Avatar placeholder (matches customer bubble style) */}
+            <div className="w-8 h-8 rounded-full bg-zinc-200 overflow-hidden shrink-0 border border-zinc-100 shadow-sm">
+                <img
+                    src="https://ui-avatars.com/api/?name=Customer&background=00E676&color=fff"
+                    alt=""
+                    className="w-full h-full object-cover"
+                />
+            </div>
+
+            <div className="max-w-[70%]">
+                <div className="rounded-[2.5rem] rounded-bl-none border-2 border-dashed border-zinc-100 bg-white shadow-sm p-6 space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                            <FileText size={18} className="text-[#00E676]" />
+                        </div>
+                        <div>
+                            <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">
+                                {proposal.title}
+                            </p>
+                            <p className="text-lg font-black text-zinc-900 leading-tight">
+                                {proposal.price}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Deliverables */}
+                    <div className="space-y-1.5">
+                        {proposal.deliverables.map((item, i) => (
+                            <div key={i} className="flex items-center gap-2 text-sm font-bold text-zinc-500">
+                                <CheckCircle2 size={14} className="text-[#00E676] shrink-0" />
+                                {item}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-3 pt-1">
+                        <button
+                            className="flex-1 h-10 rounded-full border border-zinc-200 text-xs font-black text-zinc-500 uppercase tracking-wider hover:border-zinc-300 hover:bg-zinc-50 transition-all"
+                        >
+                            View Details
+                        </button>
+                        <button
+                            onClick={onAccept}
+                            className="flex-1 h-10 rounded-full bg-[#00E676] hover:bg-[#00c968] text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
+                        >
+                            Accept
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2 px-1 mt-1.5 justify-start">
+                    <span className="text-[8px] font-black uppercase tracking-widest opacity-40 italic text-zinc-300">
+                        Proposal
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 interface ProviderMessageRoomProps {
     room: ProviderMessage;
     onBack: () => void;
@@ -29,6 +105,39 @@ export default function ProviderMessageRoom({ room, onBack, userName, token }: P
     const [input, setInput] = useState("");
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
+
+    // ─── Accept Proposal → Create Order ───
+    const handleAcceptOrder = async () => {
+        // ─── START: Sample order hardcoded data ───
+        const orderPayload = {
+            price: "540.00",
+            discount: "0.00",
+            delivery_days: 5,
+            revisions: 3,
+            signature: `accepted-by-${userName}`,
+        };
+        // ─── END: Sample order hardcoded data ───
+
+        try {
+            const res = await fetch("/api/providers/providerDashboard/order/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${token}`,
+                },
+                body: JSON.stringify(orderPayload),
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                console.log("orderplaced", data);
+            } else {
+                console.error("Order creation failed:", res.status, data);
+            }
+        } catch (err) {
+            console.error("Order API error:", err);
+        }
+    };
 
     // Fetch message history
     useEffect(() => {
@@ -164,6 +273,10 @@ export default function ProviderMessageRoom({ room, onBack, userName, token }: P
                             </div>
                         );
                     })}
+
+                    {/* ─── START: Hardcoded Proposal Card (sample order data) ─── */}
+                    <ProposalCard onAccept={handleAcceptOrder} />
+                    {/* ─── END: Hardcoded Proposal Card (sample order data) ─── */}
                 </div>
 
                 {/* Chat Footer / Input */}

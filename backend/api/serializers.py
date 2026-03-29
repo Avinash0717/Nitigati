@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Provider, Customer, Service
+from .models import Provider, Customer, Service, Order
 import json
 import uuid
 import json
@@ -346,3 +346,20 @@ class DiscoverServicesSerializer(serializers.Serializer):
     featured = ServiceReadSerializer(many=True)
     trending = ServiceReadSerializer(many=True)
     recommended = ServiceReadSerializer(many=True)
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    """Serializer for creating and reading Order records.
+    customer, provider, and service are injected via save() in the view.
+    """
+
+    class Meta:
+        model = Order
+        fields = [
+            'order_id', 'customer', 'provider',
+            'service', 'price', 'discount',
+            'delivery_days', 'revisions', 'signature',
+            'status', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['order_id', 'customer', 'provider', 'service', 'status', 'created_at', 'updated_at']
+

@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Provider, Customer, Tag, Service, ServiceMedia, ServiceCredential, UserPreference
+from .models import Provider, Customer, Tag, Service, ServiceMedia, ServiceCredential, UserPreference, Order
 import json
 from .serializers import (
     ProviderCreateSerializer, ProviderImageUploadSerializer, 
@@ -12,7 +12,7 @@ from .serializers import (
     ServiceCreateSerializer, ServiceReadSerializer,
     CustomerDashboardSerializer, CustomerOrderSerializer,
     CustomerTransactionSerializer, CustomerMessageSerializer,
-    DiscoverServicesSerializer
+    DiscoverServicesSerializer, OrderSerializer
 )
 from rest_framework.authtoken.models import Token # type: ignore
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication # type: ignore
@@ -717,3 +717,42 @@ def customer_discover_services_list(request):
     
     serializer = DiscoverServicesSerializer(data, context={'request': request})
     return Response(serializer.data)
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def order_create(request):
+    """
+    POST /api/orders/create/
+    Creates an Order record.
+    Provider = request.user (authenticated).
+    Customer = first Customer in DB (temporary).
+    Service = first Service in DB (temporary).
+    """
+    serializer = OrderSerializer(data=request.data)
+    if serializer.is_valid():
+        customer = Customer.objects.first()
+        service = Service.objects.first()
+
+        if not customer or not service:
+            return Response(
+                {"error": "Missing base data. Ensure at least one Customer and one Service exist."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order = serializer.save(
+            provider=request.user,
+            customer=customer.user,
+            service=service,
+        )
+        return Response(
+            {
+                "message": "Order created successfully.",
+                "order_id": str(order.order_id),
+                "status": order.status,
+            },
+            status=status.HTTP_201_CREATED
+        )
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+

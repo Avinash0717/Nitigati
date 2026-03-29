@@ -23,7 +23,7 @@ import Dashboard from "@/components/providerDashboard/Dashboard";
 import ProviderMessages from "@/components/providerDashboard/providerMessages/ProviderMessages";
 import ProviderServices from "@/components/providerDashboard/providerServices/ProviderServicesLobby";
 import ProviderServicePage from "@/components/providerDashboard/providerServices/ProviderServicePage";
-import ProviderOrders from "@/components/providerDashboard/ProviderOrders";
+import ProviderOrders from "@/components/providerDashboard/providerOrders/ProviderOrders";
 import { useSessionManager } from "@/components/Auth/SessionManager";
 // Interfaces
 interface RecentOrder {
@@ -101,6 +101,21 @@ export interface ChatMessage {
     sender_username: string;
     content: string;
     timestamp: string;
+}
+
+export interface Order {
+    order_id: string;
+    customer: string;
+    provider: string;
+    service: string;
+    price: string;
+    discount: string;
+    delivery_days: number;
+    revisions: number;
+    signature: string | null;
+    status: string;
+    created_at: string;
+    updated_at: string;
 }
 
 export type ChatViewType = "lobby" | "room";
