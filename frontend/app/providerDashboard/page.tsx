@@ -20,7 +20,7 @@ import {
 
 // Components
 import Dashboard from "@/components/providerDashboard/Dashboard";
-import ProviderMessages from "@/components/providerDashboard/ProviderMessages";
+import ProviderMessages from "@/components/providerDashboard/providerMessages/ProviderMessages";
 import ProviderServices from "@/components/providerDashboard/providerServices/ProviderServicesLobby";
 import ProviderServicePage from "@/components/providerDashboard/providerServices/ProviderServicePage";
 import ProviderOrders from "@/components/providerDashboard/ProviderOrders";
@@ -48,6 +48,7 @@ interface DashboardData {
         last_month: number[];
     };
     pending_payout: number;
+    user_name: string;
 }
 
 export interface ServiceSummary {
@@ -79,7 +80,30 @@ type ViewType =
     | "messages"
     | "services"
     | "orders"
-    | "service detail";
+    | "service detail"
+    | "messages";
+
+export interface ProviderMessage {
+    id: string;
+    name: string;
+    participants_usernames: string[];
+    last_message?: {
+        content: string;
+        timestamp: string;
+        sender: string;
+    } | null;
+    unread_count?: number;
+}
+
+export interface ChatMessage {
+    id: string;
+    room: string;
+    sender_username: string;
+    content: string;
+    timestamp: string;
+}
+
+export type ChatViewType = "lobby" | "room";
 
 export default function ProviderDashboardPage() {
     const router = useRouter();
@@ -94,11 +118,23 @@ export default function ProviderDashboardPage() {
         useState<ServiceDetail | null>(null);
     const [servicesLoading, setServicesLoading] = useState(false);
 
+    // Messaging State
+    const [messages, setMessages] = useState<ProviderMessage[]>([]);
+    const [selectedRoom, setSelectedRoom] = useState<ProviderMessage | null>(null);
+    const [chatView, setChatView] = useState<ChatViewType>("lobby");
+    const [messagesLoading, setMessagesLoading] = useState(false);
+
     useEffect(() => {
         async function fetchDashboardData() {
+            const token = sessionManager.getToken();
             try {
                 const response = await fetch(
                     "/api/providers/providerDashboard/dashboard",
+                    {
+                        headers: {
+                            Authorization: `Token ${token}`,
+                        },
+                    }
                 );
                 if (!response.ok)
                     throw new Error("Failed to fetch dashboard data");
@@ -114,6 +150,43 @@ export default function ProviderDashboardPage() {
 
         fetchDashboardData();
     }, []);
+
+    const fetchMessages = async () => {
+        setActiveView("messages");
+        setChatView("lobby");
+        const token = sessionManager.getToken();
+        if (!token) return;
+
+        setMessagesLoading(true);
+        try {
+            const response = await fetch("/api/providers/providerDashboard/messages/", {
+                headers: { Authorization: `Token ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Normalize message data for the UI
+                const normalizedMessages = data.map((room: any) => ({
+                    id: room.id,
+                    name: room.name,
+                    participants_usernames: room.participants_usernames,
+                    last_message: room.last_message ? {
+                        content: room.last_message.content,
+                        timestamp: room.last_message.timestamp,
+                        sender: room.last_message.sender
+                    } : null,
+                    unread_count: room.unread_count || 0
+                }));
+
+                setMessages(normalizedMessages);
+            }
+        } catch (err) {
+            console.error("Error fetching provider messages:", err);
+            setError("Failed to load messages.");
+        } finally {
+            setMessagesLoading(false);
+        }
+    };
 
     const fetchServices = async () => {
         setActiveView("services");
@@ -222,8 +295,6 @@ export default function ProviderDashboardPage() {
         switch (activeView) {
             case "dashboard":
                 return data ? <Dashboard data={data} /> : null;
-            case "messages":
-                return <ProviderMessages />;
             case "services":
                 return (
                     <ProviderServices
@@ -237,8 +308,25 @@ export default function ProviderDashboardPage() {
                     <ProviderServicePage
                         service={selectedService}
                         onBack={() => setActiveView("services")}
+                        onMessageProvider={() => {}} // No-op as provider is looking at own service
                     />
                 ) : null;
+            case "messages":
+                return (
+                    <ProviderMessages 
+                        messages={messages}
+                        view={chatView}
+                        selectedRoom={selectedRoom}
+                        onBackToLobby={() => setChatView("lobby")}
+                        onSelectRoom={(room: ProviderMessage) => {
+                            setSelectedRoom(room);
+                            setChatView("room");
+                        }}
+                        userName={data?.user_name || ""}
+                        token={sessionManager.getToken() || ""}
+                        loading={messagesLoading}
+                    />
+                );
             case "orders":
                 return <ProviderOrders />;
             default:
@@ -282,6 +370,8 @@ export default function ProviderDashboardPage() {
                             onClick={() => {
                                 if (item.id === "services") {
                                     fetchServices();
+                                } else if (item.id === "messages") {
+                                    fetchMessages();
                                 } else {
                                     setActiveView(item.id as ViewType);
                                 }
@@ -427,17 +517,19 @@ export default function ProviderDashboardPage() {
                 </header>
 
                 {/* Center Content Padding Area */}
-                <div className="p-10 max-w-7xl mx-auto w-full">
-                    <div className="mb-12">
-                        <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-2">
-                            <span>Nitigati Partner</span>
-                            <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
-                            <span>{activeView}</span>
+                <div className={`mx-auto w-full ${activeView === "messages" && chatView === "room" ? "p-0 h-[calc(100vh-6rem)] overflow-hidden" : "p-10 max-w-7xl"}`}>
+                    {(activeView !== "messages" || chatView !== "room") && (
+                        <div className="mb-12">
+                            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-2">
+                                <span>Nitigati Partner</span>
+                                <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
+                                <span>{activeView}</span>
+                            </div>
+                            <h2 className="text-4xl font-black text-zinc-900 tracking-tight capitalize">
+                                {activeView}
+                            </h2>
                         </div>
-                        <h2 className="text-4xl font-black text-zinc-900 tracking-tight capitalize">
-                            {activeView}
-                        </h2>
-                    </div>
+                    )}
 
                     {renderContent()}
                 </div>

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: Request) {
+    const token = request.headers.get("authorization");
     try {
         const backendResponse = await fetch("http://localhost:8000/api/provider-dashboard/summary/", {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
+                "Authorization": token || "",
             },
         });
 

@@ -1,3 +1,4 @@
+"use client";
 import React, { useState, useEffect, useRef } from "react";
 import {
     ChevronLeft,
@@ -14,16 +15,16 @@ import {
     ArrowUpRight,
     ChevronDown,
 } from "lucide-react";
-import { CustomerMessage, ChatMessage } from "@/app/customerDashboard/page";
+import { ProviderMessage, ChatMessage } from "@/app/providerDashboard/page";
 
-interface CustomerMessageRoomProps {
-    room: CustomerMessage;
+interface ProviderMessageRoomProps {
+    room: ProviderMessage;
     onBack: () => void;
     userName: string;
     token: string;
 }
 
-export default function CustomerMessageRoom({ room, onBack, userName, token }: CustomerMessageRoomProps) {
+export default function ProviderMessageRoom({ room, onBack, userName, token }: ProviderMessageRoomProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [socket, setSocket] = useState<WebSocket | null>(null);
@@ -33,7 +34,7 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
     useEffect(() => {
         async function fetchHistory() {
             try {
-                const res = await fetch(`/api/customer/customerDashboard/messages?room=${room.name}`, {
+                const res = await fetch(`/api/providers/providerDashboard/messages/?room=${room.name}`, {
                     headers: { Authorization: `Token ${token}` }
                 });
                 if (res.ok) {
@@ -82,10 +83,10 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
         setInput("");
     };
 
-    const providerName = room.participants_usernames.find(u => u !== userName) || "Provider";
+    const customerName = room.participants_usernames.find(u => u !== userName) || "Customer";
 
     return (
-        <div className="flex h-full bg-white border-l border-zinc-100 overflow-hidden animate-in fade-in duration-500">
+        <div className="flex h-full bg-white border-l border-zinc-100 overflow-hidden animate-in fade-in duration-500 gap-5">
             {/* Main Chat Area */}
             <div className="flex-1 flex flex-col min-w-0 bg-white">
                 {/* Chat Header */}
@@ -99,13 +100,13 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
                         </button>
                         <div className="flex items-center gap-4">
                             <div className="w-11 h-11 rounded-full bg-emerald-50 overflow-hidden border border-zinc-100">
-                                <img src={`https://ui-avatars.com/api/?name=${providerName}&background=00E676&color=fff&size=100`} alt="" className="w-full h-full object-cover" />
+                                <img src={`https://ui-avatars.com/api/?name=${customerName}&background=00E676&color=fff&size=100`} alt="" className="w-full h-full object-cover" />
                             </div>
                             <div>
-                                <h3 className="text-base font-black text-zinc-900 leading-none mb-1">{providerName}</h3>
+                                <h3 className="text-base font-black text-zinc-900 leading-none mb-1">{customerName}</h3>
                                 <div className="flex items-center gap-1.5">
                                     <span className="w-1.5 h-1.5 bg-[#00E676] rounded-full animate-pulse shadow-[0_0_8px_#00E676]"></span>
-                                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Online</span>
+                                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Customer Portfolio</span>
                                 </div>
                             </div>
                         </div>
@@ -127,13 +128,13 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
                 >
                     {/* Date Separator */}
                     <div className="flex justify-center">
-                        <span className="px-4 py-1 rounded-full bg-zinc-100/50 text-[9px] font-black text-zinc-400 uppercase tracking-widest">Today</span>
+                        <span className="px-4 py-1 rounded-full bg-zinc-100/50 text-[9px] font-black text-zinc-400 uppercase tracking-widest">First Interaction</span>
                     </div>
 
                     {/* Order Status Notification */}
                     <div className="bg-sky-50/50 border border-sky-100/30 rounded-3xl p-6 text-center max-w-lg mx-auto shadow-sm">
-                        <p className="text-sky-900 font-bold text-sm leading-relaxed mb-1">Order discussion initiated for <span className="text-sky-600">"Custom Logo & Brand Identity"</span></p>
-                        <p className="text-zinc-400 font-black text-[9px] uppercase tracking-widest italic">Customer requested a custom proposal</p>
+                        <p className="text-sky-900 font-bold text-sm leading-relaxed mb-1">New inquiry received for <span className="text-sky-600">"Custom Logo & Brand Identity"</span></p>
+                        <p className="text-zinc-400 font-black text-[9px] uppercase tracking-widest italic">Awaiting your professional proposal</p>
                     </div>
 
                     {/* Chat Bubbles */}
@@ -143,13 +144,13 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
                             <div key={idx} className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                                 {!isMe && (
                                     <div className="w-8 h-8 rounded-full bg-zinc-200 overflow-hidden shrink-0 border border-zinc-100 shadow-sm">
-                                        <img src={`https://ui-avatars.com/api/?name=${providerName}&background=00E676&color=fff`} alt="" className="w-full h-full object-cover" />
+                                        <img src={`https://ui-avatars.com/api/?name=${customerName}&background=00E676&color=fff`} alt="" className="w-full h-full object-cover" />
                                     </div>
                                 )}
                                 <div className={`max-w-[70%] group`}>
                                     <div className={`p-5 rounded-3xl shadow-sm text-sm font-bold leading-relaxed transition-all ${isMe
-                                            ? 'bg-[#00E676] text-white rounded-br-none'
-                                            : 'bg-white text-zinc-600 border border-zinc-100 rounded-bl-none'
+                                        ? 'bg-[#00E676] text-white rounded-br-none'
+                                        : 'bg-white text-zinc-600 border border-zinc-100 rounded-bl-none'
                                         }`}>
                                         {msg.content}
                                     </div>
@@ -163,38 +164,6 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
                             </div>
                         );
                     })}
-
-                    {/* Proposal Mock Item */}
-                    <div className="flex items-end gap-3 flex-row px-2">
-                        <div className="w-8 h-8 rounded-full bg-zinc-200 overflow-hidden shrink-0 border border-zinc-100 shadow-sm">
-                            <img src={`https://ui-avatars.com/api/?name=${providerName}&background=00E676&color=fff`} alt="" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="max-w-[85%] bg-white p-8 rounded-[2.5rem] border-2 border-dashed border-zinc-100 shadow-xl overflow-hidden group">
-                            <div className="flex items-center gap-5 mb-8">
-                                <div className="w-14 h-14 bg-[#00E676]/5 text-[#00E676] rounded-2xl flex items-center justify-center shadow-inner ring-1 ring-[#00E676]/10">
-                                    <FileText size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-zinc-300 uppercase tracking-widest mb-1 italic">Proposal Sent</p>
-                                    <h5 className="text-2xl font-black text-zinc-900 leading-none">$540.00 <span className="text-[10px] text-zinc-300 uppercase ml-1">USD</span></h5>
-                                </div>
-                            </div>
-                            <div className="space-y-3 mb-8 px-2">
-                                <div className="flex items-center gap-3 text-zinc-500">
-                                    <CheckCircle2 size={14} className="text-[#00E676]" />
-                                    <span className="text-xs font-bold">Logo + Social Media Kit</span>
-                                </div>
-                                <div className="flex items-center gap-3 text-zinc-500">
-                                    <CheckCircle2 size={14} className="text-[#00E676]" />
-                                    <span className="text-xs font-bold">3 Revisions</span>
-                                </div>
-                            </div>
-                            <div className="flex gap-3">
-                                <button className="flex-1 h-12 bg-white hover:bg-zinc-50 text-zinc-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-zinc-100">View Details</button>
-                                <button className="flex-1 h-12 bg-zinc-50 text-zinc-400 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-default">Awaiting Response</button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Chat Footer / Input */}
@@ -224,8 +193,8 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
             </div>
 
             {/* Right Sidebar - Order Summary Section Unified */}
-            <aside className="w-[400px] hidden xl:flex shrink-0 border-l border-zinc-100 bg-white">
-                <div className="m-6 flex flex-col h-full rounded-[2rem] border border-zinc-100 shadow-lg bg-white p-6">
+            <aside className="w-[380px] hidden xl:flex shrink-0 border-l border-zinc-100 bg-white">
+                <div className="m-6 flex flex-col h-full rounded-[2rem] border border-zinc-100 shadow-sm bg-white p-6">
 
                     {/* Header */}
                     <div className="flex items-center justify-between mb-4">
@@ -233,13 +202,15 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
                             Order Summary
                         </h3>
                         <span className="px-3 py-1 bg-orange-50 text-orange-500 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                            Negotiating
+                            Drafting
                         </span>
                     </div>
 
                     {/* Service */}
                     <div className="mb-4">
-                        <p className="text-[9px] font-black text-zinc-300 uppercase mb-1">Service</p>
+                        <p className="text-[9px] font-black text-zinc-300 uppercase mb-1">
+                            Service
+                        </p>
                         <p className="text-sm font-black text-zinc-900 leading-tight">
                             Custom Logo & Brand Identity
                         </p>
@@ -263,7 +234,11 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
                         </p>
 
                         <div className="space-y-2">
-                            {["3 Custom Logo Concepts", "Social Media Kit", "Vector Source Files"].map((item, i) => (
+                            {[
+                                "3 Custom Logo Concepts",
+                                "Social Media Kit",
+                                "Vector Source Files"
+                            ].map((item, i) => (
                                 <div key={i} className="flex items-center gap-2 text-sm text-zinc-600">
                                     <CheckCircle2 size={14} className="text-[#00E676]" />
                                     {item}
@@ -289,16 +264,16 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
 
                         <div className="flex justify-between text-xs text-zinc-400">
                             <span>Service Fee (10%)</span>
-                            <span>+ $54.00</span>
+                            <span>- $54.00</span>
                         </div>
 
                         <div className="flex justify-between items-center bg-[#00E676]/10 px-4 py-3 rounded-xl">
-                            <span className="text-xs font-bold">Total Payable</span>
-                            <span className="text-lg font-black text-[#00E676]">$594.00</span>
+                            <span className="text-xs font-bold">You Receive</span>
+                            <span className="text-lg font-black text-[#00E676]">$486.00</span>
                         </div>
 
-                        <button className="w-full h-14 mb-2 bg-[#00E676] hover:bg-[#00c968] text-white rounded-xl font-black tracking-wide">
-                            Send Proposal
+                        <button className="w-full h-14 bg-[#00E676] hover:bg-[#00c968] mb-2 text-white rounded-xl font-black tracking-wide">
+                            Send Order Proposal
                         </button>
                     </div>
 
@@ -307,5 +282,3 @@ export default function CustomerMessageRoom({ room, onBack, userName, token }: C
         </div>
     );
 }
-
-// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

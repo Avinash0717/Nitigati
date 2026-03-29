@@ -269,6 +269,8 @@ def provider_ai_onboarding(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def provider_dashboard_summary(request):
     """
     GET /api/provider-dashboard/summary/
@@ -278,6 +280,7 @@ def provider_dashboard_summary(request):
     # For now, we return mock stats based on the UI design requirements.
     
     summary_data = {
+        "user_name": request.user.first_name or request.user.username,
         "verification_status": "In Progress",
         "trust_badge": "Rising Talent",
         "trust_badge_detail": "Based on your 98% job success rate and excellent client feedback over the last 2 weeks.",
