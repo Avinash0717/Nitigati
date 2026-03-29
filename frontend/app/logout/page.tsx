@@ -1,15 +1,23 @@
 "use client";
-import { MessageSquare, Star } from "lucide-react";
 import { useSessionManager } from "@/components/Auth/SessionManager";
 import { useRouter } from "next/navigation";
-export default function ExpertsPage() {
+import { useEffect, useRef } from "react";
+
+export default function LogoutPage() {
     const router = useRouter();
     const sessionManager = useSessionManager();
-    if (!sessionManager.isLoggedIn) {
+    const hasProcessedLogout = useRef(false);
+
+    useEffect(() => {
+        if (hasProcessedLogout.current) {
+            return;
+        }
+
+        hasProcessedLogout.current = true;
         sessionManager.clearToken();
-        return null;
-    }
-    router.push("/login");
+        router.replace("/login");
+    }, [sessionManager, router]);
+
     return (
         <div className="min-h-screen bg-[#f7faf8]">
             {/* ================= HEADER ================= */}

@@ -1,49 +1,310 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSessionManager } from "@/components/Auth/SessionManager";
+
+type Language = "en" | "hi";
 
 export default function Home() {
     const [search, setSearch] = useState("");
+    const [language, setLanguage] = useState<Language>("en");
+    const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+    const languageMenuRef = useRef<HTMLDivElement | null>(null);
 
-    const categories = [
-        {
-            name: "Carpentry",
-            desc: "Furniture repair",
-            img: "https://images.unsplash.com/photo-1581141849291-1125c7b692b5?w=400&h=300&fit=crop",
+    const translations = {
+        en: {
+            navHowItWorks: "How it Works",
+            navCategories: "Categories",
+            authLogin: "Login",
+            authJoin: "Join",
+            authLogout: "Logout",
+            authDashboard: "Dashboard",
+            languageButton: "हिन्दी / EN",
+            heroTitleLine1: "Find trusted local help",
+            heroTitleLine2: "in your city",
+            heroDesc:
+                "Connecting you with skilled professionals for home, education, and lifestyle services.",
+            searchPlaceholder: "Search for Carpentry, Tailoring, Tutoring...",
+            searchButton: "Search",
+            tryLabel: "Try:",
+            quickTags: ["Electrician", "Plumbing", "Home Cleaning"],
+            categorySectionTitle: "Popular Service Categories",
+            viewAll: "View All",
+            categories: [
+                {
+                    name: "Carpentry",
+                    desc: "Furniture repair",
+                    img: "https://images.unsplash.com/photo-1581141849291-1125c7b692b5?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "Tailoring",
+                    desc: "Custom stitching",
+                    img: "https://images.unsplash.com/photo-1552330614-3709dec866a1?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "Tutoring",
+                    desc: "School subjects",
+                    img: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "Electrician",
+                    desc: "Wiring & repair",
+                    img: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "Plumbing",
+                    desc: "Pipes & leaks",
+                    img: "https://images.unsplash.com/photo-1542013936693-884638332954?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "Cleaning",
+                    desc: "Home & office",
+                    img: "https://images.unsplash.com/photo-1581578731548-c64695ce6958?w=400&h=300&fit=crop",
+                },
+            ],
+            stepsSectionTitle: "Get work done in 5 simple steps",
+            steps: [
+                {
+                    title: "1. Discover",
+                    desc: "Find the right person for your specific job",
+                },
+                {
+                    title: "2. Discuss",
+                    desc: "Chat or call to explain what you need",
+                },
+                {
+                    title: "3. Confirm",
+                    desc: "Agree on time and price together",
+                },
+                {
+                    title: "4. Work",
+                    desc: "The service professional performs the job",
+                },
+                {
+                    title: "5. Review",
+                    desc: "Share your experience to help others",
+                },
+            ],
+            customerCtaTitle: "Looking for services?",
+            customerCtaDesc:
+                "Join thousands of customers who find quality help daily.",
+            customerCtaButton: "Get Started",
+            providerCtaTitle: "Are you a Professional?",
+            providerCtaDesc:
+                "Grow your business by finding local jobs in your area.",
+            providerCtaButton: "Register as Provider",
+            footerDescription:
+                "Empowering local communities through skilled work, transparency, and trust since 2024.",
+            footerCompany: "Company",
+            footerResources: "Resources",
+            footerSupport: "Support",
+            footerCompanyLinks: ["About Us", "Careers", "Contact"],
+            footerResourceLinks: [
+                "How It Works",
+                "Provider Rules",
+                "Safety Tips",
+            ],
+            footerSupportLinks: [
+                "Help Center",
+                "Terms of Service",
+                "Privacy Policy",
+            ],
+            footerCopyright:
+                "© 2024 Nitigati Platforms Pvt Ltd. Built with ❤️ for India.",
+            footerLanguage: "Language: English",
+            footerLocation: "Mumbai, India",
+            languageMenuEnglish: "English",
+            languageMenuHindi: "हिन्दी",
         },
-        {
-            name: "Tailoring",
-            desc: "Custom stitching",
-            img: "https://images.unsplash.com/photo-1552330614-3709dec866a1?w=400&h=300&fit=crop",
+        hi: {
+            navHowItWorks: "कैसे काम करता है",
+            navCategories: "श्रेणियां",
+            authLogin: "लॉगिन",
+            authJoin: "जॉइन करें",
+            authLogout: "लॉगआउट",
+            authDashboard: "डैशबोर्ड",
+            languageButton: "हिन्दी / EN",
+            heroTitleLine1: "अपने शहर में भरोसेमंद",
+            heroTitleLine2: "लोकल मदद पाएँ",
+            heroDesc:
+                "घर, शिक्षा और लाइफस्टाइल सेवाओं के लिए कुशल प्रोफेशनल्स से जुड़ें।",
+            searchPlaceholder:
+                "कारपेंट्री, टेलरिंग, ट्यूशन जैसी सेवाएं खोजें...",
+            searchButton: "खोजें",
+            tryLabel: "आजमाएं:",
+            quickTags: ["इलेक्ट्रीशियन", "प्लंबिंग", "होम क्लीनिंग"],
+            categorySectionTitle: "लोकप्रिय सेवा श्रेणियां",
+            viewAll: "सभी देखें",
+            categories: [
+                {
+                    name: "कारपेंट्री",
+                    desc: "फर्नीचर मरम्मत",
+                    img: "https://images.unsplash.com/photo-1581141849291-1125c7b692b5?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "टेलरिंग",
+                    desc: "कस्टम सिलाई",
+                    img: "https://images.unsplash.com/photo-1552330614-3709dec866a1?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "ट्यूशन",
+                    desc: "स्कूल विषय",
+                    img: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "इलेक्ट्रीशियन",
+                    desc: "वायरिंग और मरम्मत",
+                    img: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "प्लंबिंग",
+                    desc: "पाइप और लीकेज",
+                    img: "https://images.unsplash.com/photo-1542013936693-884638332954?w=400&h=300&fit=crop",
+                },
+                {
+                    name: "क्लीनिंग",
+                    desc: "घर और ऑफिस",
+                    img: "https://images.unsplash.com/photo-1581578731548-c64695ce6958?w=400&h=300&fit=crop",
+                },
+            ],
+            stepsSectionTitle: "5 आसान चरणों में काम पूरा करें",
+            steps: [
+                {
+                    title: "1. खोजें",
+                    desc: "अपने काम के लिए सही व्यक्ति चुनें",
+                },
+                {
+                    title: "2. बात करें",
+                    desc: "चैट या कॉल करके अपनी जरूरत बताएं",
+                },
+                {
+                    title: "3. पक्का करें",
+                    desc: "समय और कीमत मिलकर तय करें",
+                },
+                {
+                    title: "4. काम",
+                    desc: "सेवा प्रोफेशनल काम पूरा करता है",
+                },
+                {
+                    title: "5. रिव्यू",
+                    desc: "अपना अनुभव साझा करें",
+                },
+            ],
+            customerCtaTitle: "सेवाएं चाहिए?",
+            customerCtaDesc:
+                "हजारों ग्राहकों के साथ जुड़ें जो रोज बेहतर सेवाएं पाते हैं।",
+            customerCtaButton: "शुरू करें",
+            providerCtaTitle: "क्या आप प्रोफेशनल हैं?",
+            providerCtaDesc:
+                "अपने क्षेत्र में लोकल काम पाकर अपना व्यवसाय बढ़ाएं।",
+            providerCtaButton: "प्रोवाइडर के रूप में रजिस्टर करें",
+            footerDescription:
+                "2024 से स्थानीय समुदायों को कुशल काम, पारदर्शिता और भरोसे के साथ सशक्त बना रहे हैं।",
+            footerCompany: "कंपनी",
+            footerResources: "संसाधन",
+            footerSupport: "सहायता",
+            footerCompanyLinks: ["हमारे बारे में", "करियर", "संपर्क"],
+            footerResourceLinks: [
+                "कैसे काम करता है",
+                "प्रोवाइडर नियम",
+                "सुरक्षा सुझाव",
+            ],
+            footerSupportLinks: [
+                "हेल्प सेंटर",
+                "सेवा की शर्तें",
+                "प्राइवेसी पॉलिसी",
+            ],
+            footerCopyright:
+                "© 2024 नीतिगति प्लेटफॉर्म्स प्राइवेट लिमिटेड। भारत के लिए ❤️ के साथ निर्मित।",
+            footerLanguage: "भाषा: हिन्दी",
+            footerLocation: "मुंबई, भारत",
+            languageMenuEnglish: "English",
+            languageMenuHindi: "हिन्दी",
         },
-        {
-            name: "Tutoring",
-            desc: "School subjects",
-            img: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=300&fit=crop",
-        },
-        {
-            name: "Electrician",
-            desc: "Wiring & repair",
-            img: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&h=300&fit=crop",
-        },
-        {
-            name: "Plumbing",
-            desc: "Pipes & leaks",
-            img: "https://images.unsplash.com/photo-1542013936693-884638332954?w=400&h=300&fit=crop",
-        },
-        {
-            name: "Cleaning",
-            desc: "Home & office",
-            img: "https://images.unsplash.com/photo-1581578731548-c64695ce6958?w=400&h=300&fit=crop",
-        },
-    ];
+    };
+
+    const t = translations[language];
+    const categories = t.categories;
+
+    const session = useSessionManager();
+    console.log("Session Token:", session.getToken());
+
+    useEffect(() => {
+        const handleOutsideClick = (event: MouseEvent) => {
+            if (
+                languageMenuRef.current &&
+                !languageMenuRef.current.contains(event.target as Node)
+            ) {
+                setIsLanguageMenuOpen(false);
+            }
+        };
+
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setIsLanguageMenuOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handleOutsideClick);
+        document.addEventListener("keydown", handleEscape);
+
+        return () => {
+            document.removeEventListener("mousedown", handleOutsideClick);
+            document.removeEventListener("keydown", handleEscape);
+        };
+    }, []);
+
+    const languageSelector = (
+        <div className="relative hidden sm:block" ref={languageMenuRef}>
+            <button
+                onClick={() => setIsLanguageMenuOpen((prev) => !prev)}
+                className="cursor-pointer flex items-center gap-2 px-4 py-2 rounded-full border border-zinc-200 text-sm font-bold hover:bg-zinc-50 transition-colors"
+                aria-haspopup="menu"
+                aria-expanded={isLanguageMenuOpen}
+                aria-label="Select page language"
+            >
+                <span className="text-lg">🌐</span>
+                <span className="tracking-tight">{t.languageButton}</span>
+            </button>
+
+            {isLanguageMenuOpen ? (
+                <div className="absolute right-0 mt-2 w-44 bg-white border border-zinc-200 rounded-xl shadow-xl py-1 z-50">
+                    <button
+                        onClick={() => {
+                            setLanguage("en");
+                            setIsLanguageMenuOpen(false);
+                            localStorage.setItem("preferredLanguage", "en");
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm font-semibold transition-colors ${
+                            language === "en"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "text-zinc-700 hover:bg-zinc-50"
+                        }`}
+                    >
+                        {t.languageMenuEnglish}
+                    </button>
+                    <button
+                        onClick={() => {
+                            setLanguage("hi");
+                            setIsLanguageMenuOpen(false);
+                            localStorage.setItem("preferredLanguage", "hi");
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm font-semibold transition-colors ${
+                            language === "hi"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "text-zinc-700 hover:bg-zinc-50"
+                        }`}
+                    >
+                        {t.languageMenuHindi}
+                    </button>
+                </div>
+            ) : null}
+        </div>
+    );
 
     const steps = [
         {
-            title: "1. Discover",
-            desc: "Find the right person for your specific job",
             icon: (
                 <svg
                     className="w-8 h-8 text-emerald-500 transition-colors group-hover:text-white"
@@ -61,8 +322,6 @@ export default function Home() {
             ),
         },
         {
-            title: "2. Discuss",
-            desc: "Chat or call to explain what you need",
             icon: (
                 <svg
                     className="w-8 h-8 text-emerald-500 transition-colors group-hover:text-white"
@@ -80,8 +339,6 @@ export default function Home() {
             ),
         },
         {
-            title: "3. Confirm",
-            desc: "Agree on time and price together",
             icon: (
                 <svg
                     className="w-8 h-8 text-emerald-500 transition-colors group-hover:text-white"
@@ -99,8 +356,6 @@ export default function Home() {
             ),
         },
         {
-            title: "4. Work",
-            desc: "The service professional performs the job",
             icon: (
                 <svg
                     className="w-8 h-8 text-emerald-500 transition-colors group-hover:text-white"
@@ -118,8 +373,6 @@ export default function Home() {
             ),
         },
         {
-            title: "5. Review",
-            desc: "Share your experience to help others",
             icon: (
                 <svg
                     className="w-8 h-8 text-emerald-500 transition-colors group-hover:text-white"
@@ -159,34 +412,51 @@ export default function Home() {
                             href="#"
                             className="text-zinc-600 hover:text-emerald-500 transition-colors font-semibold"
                         >
-                            How it Works
+                            {t.navHowItWorks}
                         </Link>
                         <Link
                             href="#"
                             className="text-zinc-600 hover:text-emerald-500 transition-colors font-semibold"
                         >
-                            Categories
+                            {t.navCategories}
                         </Link>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <button className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full border border-zinc-200 text-sm font-bold hover:bg-zinc-50 transition-colors">
-                            <span className="text-lg">🌐</span>
-                            <span className="tracking-tight">हिन्दी / EN</span>
-                        </button>
-                        <Link
-                            href="/login"
-                            className="px-4 py-2 text-sm font-bold hover:text-emerald-500 transition-colors"
-                        >
-                            Login
-                        </Link>
-                        <Link
-                            href="/#Onboarding"
-                            className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
-                        >
-                            Join
-                        </Link>
-                    </div>
+                    {session.getToken() == null ? (
+                        <div className="flex items-center gap-4">
+                            {languageSelector}
+
+                            <Link
+                                href="/login"
+                                className="px-4 py-2 text-sm font-bold hover:text-emerald-500 transition-colors"
+                            >
+                                {t.authLogin}
+                            </Link>
+                            <Link
+                                href="/#Onboarding"
+                                className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                            >
+                                {t.authJoin}
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-4">
+                            {languageSelector}
+
+                            <Link
+                                href="/logout"
+                                className="px-4 py-2 text-sm font-bold hover:text-emerald-500 transition-colors"
+                            >
+                                {t.authLogout}
+                            </Link>
+                            <Link
+                                href="/customerDashboard"
+                                className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                            >
+                                {t.authDashboard}
+                            </Link>
+                        </div>
+                    )}
                 </div>
             </nav>
 
@@ -195,17 +465,16 @@ export default function Home() {
                 <section className="relative py-24 lg:py-32 overflow-hidden bg-white">
                     <div className="max-w-5xl mx-auto px-4 text-center">
                         <h1 className="text-5xl lg:text-7xl font-black tracking-tight mb-6 leading-[1.1] text-zinc-900">
-                            Find trusted local help
+                            {t.heroTitleLine1}
                             <br />
-                            in your city
+                            {t.heroTitleLine2}
                         </h1>
                         <p className="text-lg lg:text-xl text-zinc-500 mb-12 max-w-2xl mx-auto leading-relaxed font-medium">
-                            Connecting you with skilled professionals for home,
-                            education, and lifestyle services.
+                            {t.heroDesc}
                         </p>
 
                         <div className="max-w-2xl mx-auto relative group">
-                            <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
+                            <div className="absolute -inset-1 bg-linear-to-r from-emerald-500 to-teal-500 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
                             <div className="relative bg-white rounded-2xl shadow-2xl border border-zinc-100 p-2 flex items-center">
                                 <div className="flex-1 flex items-center px-4">
                                     <span className="text-xl grayscale opacity-50">
@@ -213,7 +482,7 @@ export default function Home() {
                                     </span>
                                     <input
                                         type="text"
-                                        placeholder="Search for Carpentry, Tailoring, Tutoring..."
+                                        placeholder={t.searchPlaceholder}
                                         className="w-full px-4 py-3 outline-none text-zinc-700 font-bold placeholder:text-zinc-300 placeholder:font-medium"
                                         value={search}
                                         onChange={(e) =>
@@ -222,23 +491,21 @@ export default function Home() {
                                     />
                                 </div>
                                 <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-3.5 rounded-xl font-black transition-all active:scale-95 shadow-lg shadow-emerald-500/20">
-                                    Search
+                                    {t.searchButton}
                                 </button>
                             </div>
                         </div>
 
                         <div className="mt-10 flex items-center justify-center flex-wrap gap-4 text-sm font-bold">
-                            <span className="text-zinc-400">Try:</span>
-                            {["Electrician", "Plumbing", "Home Cleaning"].map(
-                                (tag) => (
-                                    <button
-                                        key={tag}
-                                        className="text-zinc-800 border-b-2 border-zinc-100 hover:border-emerald-500 transition-all px-1 pb-0.5"
-                                    >
-                                        {tag}
-                                    </button>
-                                ),
-                            )}
+                            <span className="text-zinc-400">{t.tryLabel}</span>
+                            {t.quickTags.map((tag) => (
+                                <button
+                                    key={tag}
+                                    className="text-zinc-800 border-b-2 border-zinc-100 hover:border-emerald-500 transition-all px-1 pb-0.5"
+                                >
+                                    {tag}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </section>
@@ -248,13 +515,13 @@ export default function Home() {
                     <div className="max-w-7xl mx-auto px-4">
                         <div className="flex items-center justify-between mb-16">
                             <h2 className="text-3xl lg:text-4xl font-black tracking-tight text-zinc-900">
-                                Popular Service Categories
+                                {t.categorySectionTitle}
                             </h2>
                             <Link
                                 href="#"
                                 className="flex items-center gap-2 text-emerald-600 font-black hover:gap-3 transition-all group"
                             >
-                                <span>View All</span>
+                                <span>{t.viewAll}</span>
                                 <span className="text-xl">→</span>
                             </Link>
                         </div>
@@ -291,7 +558,7 @@ export default function Home() {
                 <section className="py-32 max-w-7xl mx-auto px-4">
                     <div className="text-center mb-24">
                         <h2 className="text-4xl font-black tracking-tight text-zinc-900 mb-4">
-                            Get work done in 5 simple steps
+                            {t.stepsSectionTitle}
                         </h2>
                         <div className="w-24 h-1.5 bg-emerald-500 mx-auto rounded-full"></div>
                     </div>
@@ -305,14 +572,14 @@ export default function Home() {
                         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-16 lg:gap-8 relative z-10">
                             {steps.map((step, idx) => (
                                 <div key={idx} className="text-center group">
-                                    <div className="w-24 h-24 bg-emerald-50 rounded-[2rem] flex items-center justify-center mx-auto mb-8 group-hover:bg-emerald-500 group-hover:rotate-12 group-hover:scale-110 transition-all duration-500 shadow-sm">
+                                    <div className="w-24 h-24 bg-emerald-50 rounded-4xl flex items-center justify-center mx-auto mb-8 group-hover:bg-emerald-500 group-hover:rotate-12 group-hover:scale-110 transition-all duration-500 shadow-sm">
                                         {step.icon}
                                     </div>
                                     <h3 className="font-black text-xl mb-3 text-zinc-900">
-                                        {step.title}
+                                        {t.steps[idx].title}
                                     </h3>
-                                    <p className="text-sm text-zinc-500 font-medium leading-relaxed max-w-[200px] mx-auto">
-                                        {step.desc}
+                                    <p className="text-sm text-zinc-500 font-medium leading-relaxed max-w-50 mx-auto">
+                                        {t.steps[idx].desc}
                                     </p>
                                 </div>
                             ))}
@@ -329,11 +596,10 @@ export default function Home() {
                         <div className="bg-emerald-50 rounded-[3rem] p-12 lg:p-20 border border-emerald-1 relative overflow-hidden group">
                             <div className="relative z-10">
                                 <h2 className="text-4xl font-black mb-6 text-emerald-950">
-                                    Looking for services?
+                                    {t.customerCtaTitle}
                                 </h2>
                                 <p className="text-emerald-900/50 mb-12 font-bold text-lg max-w-xs">
-                                    Join thousands of customers who find quality
-                                    help daily.
+                                    {t.customerCtaDesc}
                                 </p>
                                 {/* <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black transition-all shadow-xl shadow-emerald-500/30 active:scale-95">
                   Get Started
@@ -342,7 +608,7 @@ export default function Home() {
                                     href="/customerOnboarding"
                                     className="bg-emerald-500 hover:bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black transition-all shadow-xl shadow-emerald-500/30 active:scale-95"
                                 >
-                                    Get Started
+                                    {t.customerCtaButton}
                                 </Link>
                             </div>
                             <div className="absolute -top-24 -right-24 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] group-hover:bg-emerald-500/20 transition-all duration-700"></div>
@@ -351,17 +617,16 @@ export default function Home() {
                         <div className="bg-zinc-900 text-white rounded-[3rem] p-12 lg:p-20 relative overflow-hidden group border border-zinc-800">
                             <div className="relative z-10">
                                 <h2 className="text-4xl font-black mb-6">
-                                    Are you a Professional?
+                                    {t.providerCtaTitle}
                                 </h2>
                                 <p className="text-zinc-500 mb-12 font-bold text-lg max-w-xs">
-                                    Grow your business by finding local jobs in
-                                    your area.
+                                    {t.providerCtaDesc}
                                 </p>
                                 <Link
                                     href="/providerOnboarding"
                                     className="inline-block bg-white hover:bg-zinc-100 text-zinc-950 px-12 py-5 rounded-2xl font-black transition-all active:scale-95 shadow-xl shadow-white/5"
                                 >
-                                    Register as Provider
+                                    {t.providerCtaButton}
                                 </Link>
                             </div>
                             <div className="absolute -bottom-24 -right-24 w-80 h-80 bg-emerald-500/20 rounded-full blur-[100px] group-hover:bg-emerald-500/30 transition-all duration-700"></div>
@@ -389,8 +654,7 @@ export default function Home() {
                                 </span>
                             </Link>
                             <p className="text-zinc-500 text-lg font-medium leading-relaxed mb-10 max-w-sm">
-                                Empowering local communities through skilled
-                                work, transparency, and trust since 2024.
+                                {t.footerDescription}
                             </p>
                             <div className="flex gap-6">
                                 <Link
@@ -416,7 +680,7 @@ export default function Home() {
 
                         <div>
                             <h4 className="font-black text-zinc-900 mb-8 uppercase tracking-widest text-xs">
-                                Company
+                                {t.footerCompany}
                             </h4>
                             <ul className="space-y-5 text-zinc-500 font-bold">
                                 <li>
@@ -424,7 +688,7 @@ export default function Home() {
                                         href="#"
                                         className="hover:text-emerald-500 transition-colors"
                                     >
-                                        About Us
+                                        {t.footerCompanyLinks[0]}
                                     </Link>
                                 </li>
                                 <li>
@@ -432,7 +696,7 @@ export default function Home() {
                                         href="#"
                                         className="hover:text-emerald-500 transition-colors"
                                     >
-                                        Careers
+                                        {t.footerCompanyLinks[1]}
                                     </Link>
                                 </li>
                                 <li>
@@ -440,7 +704,7 @@ export default function Home() {
                                         href="#"
                                         className="hover:text-emerald-500 transition-colors"
                                     >
-                                        Contact
+                                        {t.footerCompanyLinks[2]}
                                     </Link>
                                 </li>
                             </ul>
@@ -448,7 +712,7 @@ export default function Home() {
 
                         <div>
                             <h4 className="font-black text-zinc-900 mb-8 uppercase tracking-widest text-xs">
-                                Resources
+                                {t.footerResources}
                             </h4>
                             <ul className="space-y-5 text-zinc-500 font-bold">
                                 <li>
@@ -456,7 +720,7 @@ export default function Home() {
                                         href="#"
                                         className="hover:text-emerald-500 transition-colors"
                                     >
-                                        How It Works
+                                        {t.footerResourceLinks[0]}
                                     </Link>
                                 </li>
                                 <li>
@@ -464,7 +728,7 @@ export default function Home() {
                                         href="#"
                                         className="hover:text-emerald-500 transition-colors"
                                     >
-                                        Provider Rules
+                                        {t.footerResourceLinks[1]}
                                     </Link>
                                 </li>
                                 <li>
@@ -472,7 +736,7 @@ export default function Home() {
                                         href="#"
                                         className="hover:text-emerald-500 transition-colors"
                                     >
-                                        Safety Tips
+                                        {t.footerResourceLinks[2]}
                                     </Link>
                                 </li>
                             </ul>
@@ -480,7 +744,7 @@ export default function Home() {
 
                         <div>
                             <h4 className="font-black text-zinc-900 mb-8 uppercase tracking-widest text-xs">
-                                Support
+                                {t.footerSupport}
                             </h4>
                             <ul className="space-y-5 text-zinc-500 font-bold">
                                 <li>
@@ -488,7 +752,7 @@ export default function Home() {
                                         href="#"
                                         className="hover:text-emerald-500 transition-colors"
                                     >
-                                        Help Center
+                                        {t.footerSupportLinks[0]}
                                     </Link>
                                 </li>
                                 <li>
@@ -496,7 +760,7 @@ export default function Home() {
                                         href="#"
                                         className="hover:text-emerald-500 transition-colors"
                                     >
-                                        Terms of Service
+                                        {t.footerSupportLinks[1]}
                                     </Link>
                                 </li>
                                 <li>
@@ -504,7 +768,7 @@ export default function Home() {
                                         href="#"
                                         className="hover:text-emerald-500 transition-colors"
                                     >
-                                        Privacy Policy
+                                        {t.footerSupportLinks[2]}
                                     </Link>
                                 </li>
                             </ul>
@@ -512,18 +776,15 @@ export default function Home() {
                     </div>
 
                     <div className="pt-12 border-t border-zinc-200 flex flex-col md:flex-row items-center justify-between gap-8 text-[11px] uppercase tracking-[0.2em] font-black text-zinc-400">
-                        <p>
-                            © 2024 Nitigati Platforms Pvt Ltd. Built with ❤️ for
-                            India.
-                        </p>
+                        <p>{t.footerCopyright}</p>
                         <div className="flex items-center gap-10">
                             <span className="flex items-center gap-3">
                                 <span className="text-emerald-500">🌏</span>{" "}
-                                Language: English
+                                {t.footerLanguage}
                             </span>
                             <span className="flex items-center gap-3">
                                 <span className="text-emerald-500">📍</span>{" "}
-                                Mumbai, India
+                                {t.footerLocation}
                             </span>
                         </div>
                     </div>

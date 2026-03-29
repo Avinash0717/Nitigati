@@ -17,6 +17,10 @@ export function useSessionManager(): SessionManager {
         cookie.get("authToken") || null,
     );
     const isLoggedIn = authToken !== null;
+    // implement a authToken state callback for the main script
+    // mainly for the logout page as the reroute is being triggered by the session
+    // manager itself, so the state change is not being detected by the useEffect in
+    // the logout page
 
     const getToken = (): string | null => {
         return authToken || cookie.get("authToken") || null;

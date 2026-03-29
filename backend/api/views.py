@@ -250,9 +250,12 @@ def provider_ai_onboarding(request):
         print(f"[AI ONBOARDING]   created_at: {provider.created_at}")
         print("="*80 + "\n")
 
+        token, _ = Token.objects.get_or_create(user=provider.user)  # type: ignore
+
         return Response(
             {
                 "uuid": str(provider.uuid),
+                "token": token.key,
                 "message": "AI onboarding complete. Provider created successfully."
             },
             status=status.HTTP_201_CREATED

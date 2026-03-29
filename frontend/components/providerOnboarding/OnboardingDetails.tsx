@@ -7,39 +7,53 @@ interface OnboardingDetailsProps {
     onSubmit: (data: OnboardingFormData) => void;
     isLoading: boolean;
     onSwitchToAI: () => void;
+    initialData?: OnboardingFormData;
+    onDataChange?: (data: Partial<OnboardingFormData>) => void;
 }
 
 export default function OnboardingDetails({
     onSubmit,
     isLoading,
     onSwitchToAI,
+    initialData,
+    onDataChange,
 }: OnboardingDetailsProps) {
     const [formData, setFormData] = useState<OnboardingFormData>({
-        name: "",
-        age: "",
-        gender: "",
-        location: "Mumbai, India", // Default
-        phoneNumber: "",
-        email: "",
-        password: "",
-        profilePicture: null,
-        legalIdFront: null,
-        legalIdBack: null,
+        name: initialData?.name || "",
+        age: initialData?.age || "",
+        gender: initialData?.gender || "",
+        location: initialData?.location || "Mumbai, India", // Default
+        phoneNumber: initialData?.phoneNumber || "",
+        email: initialData?.email || "",
+        password: initialData?.password || "",
+        profilePicture: initialData?.profilePicture || null,
+        legalIdFront: initialData?.legalIdFront || null,
+        legalIdBack: initialData?.legalIdBack || null,
     });
 
     const [previews, setPreviews] = useState<{
         profile: string | null;
         idFront: string | null;
         idBack: string | null;
-    }>({
-        profile: null,
-        idFront: null,
-        idBack: null,
-    });
+    }>(() => ({
+        profile: initialData?.profilePicture
+            ? URL.createObjectURL(initialData.profilePicture)
+            : null,
+        idFront: initialData?.legalIdFront
+            ? URL.createObjectURL(initialData.legalIdFront)
+            : null,
+        idBack: initialData?.legalIdBack
+            ? URL.createObjectURL(initialData.legalIdBack)
+            : null,
+    }));
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+        setFormData((prev) => {
+            const next = { ...prev, [name]: value };
+            onDataChange?.(next);
+            return next;
+        });
     };
 
     const handleFileChange = (
@@ -47,7 +61,11 @@ export default function OnboardingDetails({
         field: "profilePicture" | "legalIdFront" | "legalIdBack",
     ) => {
         const file = e.target.files?.[0] || null;
-        setFormData((prev) => ({ ...prev, [field]: file }));
+        setFormData((prev) => {
+            const next = { ...prev, [field]: file };
+            onDataChange?.(next);
+            return next;
+        });
 
         if (file) {
             const reader = new FileReader();
@@ -68,7 +86,11 @@ export default function OnboardingDetails({
     };
 
     const handleGenderChange = (gender: string) => {
-        setFormData((prev) => ({ ...prev, gender }));
+        setFormData((prev) => {
+            const next = { ...prev, gender };
+            onDataChange?.(next);
+            return next;
+        });
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -152,7 +174,7 @@ export default function OnboardingDetails({
                             </div>
                             <div>
                                 <label className={labelClasses}>Gender</label>
-                                <div className="flex items-center gap-6 h-[60px] px-4">
+                                <div className="flex items-center gap-6 h-15 px-4">
                                     {["Male", "Female", "Other"].map((g) => (
                                         <label
                                             key={g}
@@ -248,7 +270,7 @@ export default function OnboardingDetails({
                         <div className="grid md:grid-cols-2 gap-6">
                             {/* Front Side */}
                             <div className="relative">
-                                <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-zinc-100 rounded-[2rem] bg-zinc-50/50 hover:bg-emerald-50/10 hover:border-emerald-500 transition-all cursor-pointer group overflow-hidden">
+                                <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-zinc-100 rounded-4xl bg-zinc-50/50 hover:bg-emerald-50/10 hover:border-emerald-500 transition-all cursor-pointer group overflow-hidden">
                                     {previews.idFront ? (
                                         <img
                                             src={previews.idFront}
@@ -282,7 +304,7 @@ export default function OnboardingDetails({
                             </div>
                             {/* Back Side */}
                             <div className="relative">
-                                <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-zinc-100 rounded-[2rem] bg-zinc-50/50 hover:bg-emerald-50/10 hover:border-emerald-500 transition-all cursor-pointer group overflow-hidden">
+                                <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-zinc-100 rounded-4xl bg-zinc-50/50 hover:bg-emerald-50/10 hover:border-emerald-500 transition-all cursor-pointer group overflow-hidden">
                                     {previews.idBack ? (
                                         <img
                                             src={previews.idBack}

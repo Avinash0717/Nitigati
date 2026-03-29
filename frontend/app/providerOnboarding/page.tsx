@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import OnboardingType from "@/components/providerOnboarding/OnboardingType";
 import OnboardingDetails from "@/components/providerOnboarding/OnboardingDetails";
@@ -24,17 +24,9 @@ export interface OnboardingFormData {
     legalIdBack: File | null;
 }
 
-export interface ProviderPayload extends OnboardingFormData {
-    // Any additional fields transformed before API call can go here
-}
-
-export interface AIProviderPayload {
-    transcript: string;
-    extracted_fields: string; // JSON string of extracted fields
-    password: string;
-    profile_picture: File | null;
-    legal_id_front: File | null;
-    legal_id_back: File | null;
+function getErrorMessage(err: unknown): string {
+    if (err instanceof Error && err.message) return err.message;
+    return "An unexpected error occurred. Please try again.";
 }
 
 // --- Controller Logic ---
@@ -47,10 +39,27 @@ export default function ProviderOnboardingPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const sessionManager = useSessionManager();
 
+    const [sharedData, setSharedData] = useState<OnboardingFormData>({
+        name: "",
+        age: "",
+        gender: "",
+        location: "Mumbai, India",
+        phoneNumber: "",
+        email: "",
+        password: "",
+        profilePicture: null,
+        legalIdFront: null,
+        legalIdBack: null,
+    });
+
     const handleTypeSelect = (type: "manual" | "ai") => {
         setOnboardingMethod(type);
         setCurrentStep(2);
     };
+
+    const handleSharedDataChange = useCallback((newData: Partial<OnboardingFormData>) => {
+        setSharedData((prev) => ({ ...prev, ...newData }));
+    }, []);
 
     const handleDetailsSubmit = async (formData: OnboardingFormData) => {
         if (!onboardingMethod) {
@@ -98,12 +107,9 @@ export default function ProviderOnboardingPage() {
             sessionManager.setToken(data.token);
             console.log("Provider created successfully:", data);
             setCurrentStep(3);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Onboarding Error:", err);
-            alert(
-                err.message ||
-                    "An unexpected error occurred. Please try again.",
-            );
+            alert(getErrorMessage(err));
         } finally {
             setIsSubmitting(false);
         }
@@ -114,13 +120,44 @@ export default function ProviderOnboardingPage() {
         console.log("Starting AI Onboarding Submission...");
 
         try {
+            const extracted = formData.extractedFields || {};
+            const name =
+                typeof extracted.name === "string" ? extracted.name : "";
+            const ageRaw = extracted.age;
+            const age =
+                typeof ageRaw === "number"
+                    ? ageRaw
+                    : typeof ageRaw === "string"
+                      ? Number.parseInt(ageRaw, 10)
+                      : NaN;
+            const gender =
+                typeof extracted.gender === "string" ? extracted.gender : "";
+            const location =
+                typeof extracted.location === "string"
+                    ? extracted.location
+                    : "";
+            const phoneNumber =
+                typeof extracted.phone_number === "string"
+                    ? extracted.phone_number
+                    : "";
+            const email =
+                typeof extracted.email === "string" ? extracted.email : "";
+
+            if (!name || Number.isNaN(age) || !gender || !formData.password) {
+                throw new Error(
+                    "AI onboarding is incomplete. Please finish the conversation and ensure required fields are captured.",
+                );
+            }
+
             const payload = new FormData();
-            payload.append("transcript", formData.transcript);
-            payload.append(
-                "extracted_fields",
-                JSON.stringify(formData.extractedFields),
-            );
+            payload.append("name", name);
+            payload.append("age", String(age));
+            payload.append("gender", gender);
+            payload.append("location", location);
+            payload.append("phone_number", phoneNumber);
+            payload.append("email", email);
             payload.append("password", formData.password);
+            payload.append("onboarding_type", "ai");
 
             if (formData.profilePicture)
                 payload.append("profile_picture", formData.profilePicture);
@@ -129,7 +166,7 @@ export default function ProviderOnboardingPage() {
             if (formData.legalIdBack)
                 payload.append("legal_id_back", formData.legalIdBack);
 
-            const response = await fetch("/api/providers/aiOnboarding", {
+            const response = await fetch("/api/providers", {
                 method: "POST",
                 body: payload,
             });
@@ -139,19 +176,17 @@ export default function ProviderOnboardingPage() {
                 throw new Error(
                     errorData.error ||
                         errorData.detail ||
-                        "Failed to process AI onboarding",
+                        "Failed to create provider",
                 );
             }
 
             const data = await response.json();
-            console.log("AI Onboarding validated successfully:", data);
+            sessionManager.setToken(data.token);
+            console.log("AI Onboarding completed successfully:", data);
             setCurrentStep(3);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("AI Onboarding Error:", err);
-            alert(
-                err.message ||
-                    "An unexpected error occurred. Please try again.",
-            );
+            alert(getErrorMessage(err));
         } finally {
             setIsSubmitting(false);
         }
@@ -171,6 +206,8 @@ export default function ProviderOnboardingPage() {
                                 setOnboardingMethod("manual")
                             }
                             isLoading={isSubmitting}
+                            initialData={sharedData}
+                            onDataChange={handleSharedDataChange}
                         />
                     );
                 }
@@ -179,6 +216,8 @@ export default function ProviderOnboardingPage() {
                         onSubmit={handleDetailsSubmit}
                         isLoading={isSubmitting}
                         onSwitchToAI={() => setOnboardingMethod("ai")}
+                        initialData={sharedData}
+                        onDataChange={handleSharedDataChange}
                     />
                 );
             case 3:

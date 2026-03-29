@@ -220,9 +220,9 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
 
     @staticmethod
     def _extract(transcript: str, previous_fields: dict) -> dict:
-        """Run Ollama extraction."""
+        """Run Gemini extraction."""
         from .extraction import extract_profile
-        logger.info("  [LLM] calling Ollama extract_profile...")
+        logger.info("  [LLM] calling Gemini extract_profile...")
         result = extract_profile(transcript, previous_fields or None)
         logger.info("  [LLM] done — fields=%s missing=%s", list(result.get("fields", {}).keys()), result.get("missing", []))
         return result
